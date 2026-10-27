@@ -2,10 +2,10 @@ package com.pfpt.tv.utils;
 
 public class Github {
 
-    public static final String URL = "https://raw.githubusercontent.com/PFPT/TV/main";
+    public static final String URL = "https://github.com/PFPT/TV/releases/latest/download";
 
     private static String getUrl(String name) {
-        return URL + "/apk/" + name;
+        return URL + "/" + name;
     }
 
     public static String getJson(String name) {

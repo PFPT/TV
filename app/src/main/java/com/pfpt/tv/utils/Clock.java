@@ -52,13 +52,14 @@ public class Clock {
 
     public void start() {
         stop();
+        App.post(this::doJob);
         timer = new Timer();
         timer.schedule(new TimerTask() {
             @Override
             public void run() {
                 App.post(() -> doJob());
             }
-        }, 0, 1000);
+        }, 1000, 1000);
     }
 
     private void doJob() {

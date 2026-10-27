@@ -1094,12 +1094,20 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     @Override
+    public void onEvents(@NonNull Player player, @NonNull Player.Events events) {
+        super.onEvents(player, events);
+        if (events.containsAny(Player.EVENT_TIMELINE_CHANGED, Player.EVENT_POSITION_DISCONTINUITY, Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_PLAYBACK_STATE_CHANGED, Player.EVENT_IS_PLAYING_CHANGED)) {
+            updateMiniTime();
+        }
+    }
+
+    @Override
     public void onTimeChanged(long time) {
         if (!isOwner() || !player().isVod()) return;
-        long position = player().getPosition();
-        long duration = player().getDuration();
-        if (position < 0 || duration <= 0) return;
-        updateMiniTime(position, duration);
+        updateMiniTime();
+        long position = readPositionMs();
+        long duration = readDurationMs();
+        if (duration <= 0) return;
         mVod.onTimeChanged(time, position, duration);
     }
 
@@ -1416,14 +1424,43 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mPiP.enter(this, player().getVideoWidth(), player().getVideoHeight(), getScale(), true);
     }
 
+    private long readPositionMs() {
+        try {
+            if (controller() != null) {
+                long position = controller().getCurrentPosition();
+                if (position >= 0) return position;
+            }
+            if (service() != null) {
+                long position = player().getPosition();
+                if (position >= 0) return position;
+            }
+        } catch (Exception ignored) {
+        }
+        return 0;
+    }
+
+    private long readDurationMs() {
+        try {
+            if (controller() != null) {
+                long duration = controller().getDuration();
+                if (duration > 0 && duration != C.TIME_UNSET) return duration;
+            }
+            if (service() != null) {
+                long duration = player().getDuration();
+                if (duration > 0 && duration != C.TIME_UNSET) return duration;
+            }
+        } catch (Exception ignored) {
+        }
+        return 0;
+    }
+
     private void updateMiniTime() {
-        long position = player().getPosition();
-        long duration = player().getDuration();
-        if (position < 0 || duration <= 0) return;
-        updateMiniTime(position, duration);
+        updateMiniTime(readPositionMs(), readDurationMs());
     }
 
     private void updateMiniTime(long position, long duration) {
+        if (position < 0) position = 0;
+        if (duration < 0 || duration == C.TIME_UNSET) duration = 0;
         String current = Util.timeMs(position);
         String total = Util.timeMs(duration);
         mBinding.control.position.setText(current);

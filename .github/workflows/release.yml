@@ -24,8 +24,9 @@ jobs:
       - name: Setup Android SDK
         run: |
           echo "sdk.dir=$ANDROID_HOME" >> local.properties
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager "platforms;android-37" "build-tools;35.0.0"
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-37" "build-tools;35.0.0"
 
       - name: Restore keystore
         env:

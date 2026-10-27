@@ -10,3 +10,5 @@ lib-*.aar
 /Release
 /docs
 /media
+.DS_Store
+media_settings 2.gradle

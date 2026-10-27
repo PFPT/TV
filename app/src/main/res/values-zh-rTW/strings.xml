@@ -41,6 +41,7 @@
     <string name="download_save_as">另存為</string>
     <string name="download_duration">持續時間：%s</string>
     <string name="download_start">開始</string>
+    <string name="download_fetch">正在取得下載地址</string>
     <string name="play_exo">EXO</string>
     <string name="play_mpv">MPV</string>
     <string name="play_other">其它</string>

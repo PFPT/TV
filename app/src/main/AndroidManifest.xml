@@ -35,7 +35,7 @@
             <action android:name="android.intent.action.SEND" />
             <data android:mimeType="text/plain" />
         </intent>
-        <package android:name="com.zhaoshuo.localvideoplayer" />
+        <package android:name="com.pfpt.localvideoplayer" />
     </queries>
 
     <application
@@ -74,7 +74,7 @@
             android:exported="false"
             tools:node="merge">
             <meta-data
-                android:name="com.fongmi.android.tv.Startup"
+                android:name="com.pfpt.tv.Startup"
                 android:value="androidx.startup" />
         </provider>
 

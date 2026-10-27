@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.fongmi.android.tv.ui.custom.ProgressLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.pfpt.tv.ui.custom.ProgressLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/progressLayout"
@@ -137,7 +137,7 @@
         android:singleLine="true"
         android:textColor="@color/white"
         android:textSize="16sp"
-        tools:text="導演：FongMi" />
+        tools:text="导演：示例" />
 
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/actor"
@@ -152,7 +152,7 @@
         android:nextFocusDown="@id/content"
         android:textColor="@color/white"
         android:textSize="16sp"
-        tools:text="演員：FongMi" />
+        tools:text="演员：示例" />
 
     <androidx.appcompat.widget.LinearLayoutCompat
         android:id="@+id/row2"
@@ -301,4 +301,4 @@
 
         </androidx.appcompat.widget.LinearLayoutCompat>
     </androidx.core.widget.NestedScrollView>
-</com.fongmi.android.tv.ui.custom.ProgressLayout>
+</com.pfpt.tv.ui.custom.ProgressLayout>

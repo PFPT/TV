@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     android:tag="land">
 
-    <com.fongmi.android.tv.ui.custom.ProgressLayout
+    <com.pfpt.tv.ui.custom.ProgressLayout
         android:id="@+id/progressLayout"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
@@ -119,7 +119,7 @@
             android:singleLine="true"
             android:textColor="@color/white"
             android:textSize="14sp"
-            tools:text="導演：FongMi" />
+            tools:text="导演：示例" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/actor"
@@ -134,7 +134,7 @@
             android:maxLines="1"
             android:textColor="@color/white"
             android:textSize="14sp"
-            tools:text="演員：FongMi" />
+            tools:text="演员：示例" />
 
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
             android:id="@+id/swipeLayout"
@@ -331,5 +331,5 @@
                 </androidx.appcompat.widget.LinearLayoutCompat>
             </androidx.core.widget.NestedScrollView>
         </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
-    </com.fongmi.android.tv.ui.custom.ProgressLayout>
+    </com.pfpt.tv.ui.custom.ProgressLayout>
 </FrameLayout>

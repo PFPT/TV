@@ -41,6 +41,7 @@
     <string name="download_save_as">Save as</string>
     <string name="download_duration">Duration: %s</string>
     <string name="download_start">Start</string>
+    <string name="download_fetch">Fetching download link</string>
     <string name="play_exo">EXO</string>
     <string name="play_mpv">MPV</string>
     <string name="play_other">Other</string>

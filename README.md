@@ -1,147 +1,87 @@
-# 開發者文件
+# TV
 
-基於 [CatVod](https://github.com/CatVodTVOfficial/CatVodTVJarLoader) 的開源 Android 影音應用程式，同時支援 **Android TV 大螢幕**與**手機**兩種使用情境，並且透過外部配置靈活擴展內容。
+Android 影音应用，仓库：[PFPT/TV](https://github.com/PFPT/TV)。参考开源项目 [FongMi/TV](https://github.com/FongMi/TV)。
 
-[討論群組](https://t.me/fongmi_official) | [發布頻道](https://t.me/fongmi_release)
+同时支持 Android TV 大屏和手机，内容通过外部配置扩展。
 
-[![Star History Chart](https://api.star-history.com/svg?repos=FongMi/TV&type=Date)](https://www.star-history.com/#FongMi/TV&Date)
+## 项目架构
 
----
-
-## 目錄
-
-- [專案架構](#專案架構)
-- [播放器](#播放器)
-- [點播功能](#點播功能)
-- [直播功能](#直播功能)
-- [爬蟲引擎](#爬蟲引擎)
-- [網路功能](#網路功能)
-- [DLNA 投放](#dlna-投放)
-- [Android Auto](#android-auto)
-- [遠端控制](#遠端控制)
-- [配置說明](#配置說明)
-- [延伸閱讀](#延伸閱讀)
-
----
-
-## 專案架構
-
-| 項目      | 值                             |
-|---------|-------------------------------|
-| package | `com.fongmi.android.tv`       |
-| minSdk  | 24（Android 7.0 Nougat）        |
-| abi     | `arm64-v8a`、`armeabi-v7a`     |
-| flavor  | `leanback`（電視版）、`mobile`（手機版） |
+| 项目 | 值 |
+| --- | --- |
+| package | `com.pfpt.tv` |
+| minSdk | 24（Android 7.0） |
+| abi | `arm64-v8a`、`armeabi-v7a` |
+| flavor | `leanback`（电视）、`mobile`（手机） |
 
 ```
 TV/
-├── app/            主應用程式（含兩套 UI Flavor）
-├── catvod/         爬蟲抽象層（Spider 介面、OkHttp 網路棧）
-├── quickjs/        QuickJS JavaScript 引擎
-├── chaquo/         Chaquopy Python 引擎
+├── app/       主应用，含 leanback 与 mobile 两套界面
+├── catvod/    爬虫抽象层（Spider、OkHttp）
+├── quickjs/   QuickJS JavaScript 引擎
+├── chaquo/    Chaquopy Python 引擎
 ```
 
-`app/src/main/` 為兩個版本共用的業務邏輯，`app/src/leanback/` 與 `app/src/mobile/` 各自實作對應 UI。
-
----
+`app/src/main/` 是两个版本共用的业务逻辑，`app/src/leanback/` 与 `app/src/mobile/` 各自实现界面。
 
 ## 播放器
 
-- **核心**：ExoPlayer（Media3）+ FFmpeg 軟解，硬解 / 軟解自動降級切換
-- **渲染**：SurfaceView / TextureView
-- **DRM**：Widevine、PlayReady、ClearKey，支援 `#KODIPROP` 宣告
-- **彈幕**：DanmakuFlameMaster，與播放時間軸精確同步，支援遠端推送
-- **字幕**：SRT / SSA / ASS 外掛字幕、系統 CaptioningManager、遠端即時注入
-- **其他**：倍速、多縮放比例、畫中畫（PiP）、背景音訊、片頭 / 片尾自動跳過
+- 核心为 ExoPlayer（Media3），并带 FFmpeg 软解，硬解失败时可切换软解
+- 渲染使用 SurfaceView / TextureView
+- DRM 支持 Widevine、PlayReady、ClearKey
+- 弹幕与播放时间轴同步，可接收远程推送
+- 字幕支持 SRT / SSA / ASS、系统字幕和远程注入
+- 支持倍速、缩放、画中画、后台音频，以及片头片尾跳过
 
----
+## 点播
 
-## 點播功能
+- 多站点分类浏览，可按年份、地区、类型筛选
+- 多站点并行搜索
+- 播放失败时按解析器、线路、其他站点依次换源
+- 观看记录保留 60 天，支持收藏和无痕模式
+- 电视版使用遥控器；手机版支持亮度、音量、进度手势，以及上下滑切集
 
-- 多站點分類瀏覽，Filter 篩選（年份 / 地區 / 類型等）
-- 多站點**並行搜尋**，關鍵字自動繁轉簡提升相容性
-- 播放失敗自動換源：解析器 → 線路 → 搜尋其他站 → 下一站點
-- 觀看記錄（保留 60 天）、收藏、無痕模式
-- 電視版使用遙控器操作；手機版支援手勢（亮度 / 音量 / 進度）、上下滑切集、螢幕旋轉與鎖定
+## 直播
 
----
+- 直播源支持 M3U、TXT（`#genre#` 分组）和 JSON
+- EPG 使用 XMLTV（含 `.gz`），每 6 小时刷新
+- 支持追看和时移
+- 频道可收藏，分组可用密码隐藏
 
-## 直播功能
+## 爬虫
 
-- 支援 M3U、TXT（`#genre#` 分組）、JSON 三種直播源格式
-- **EPG**：XMLTV 格式（支援 `.gz`），每 6 小時自動刷新
-- **追看 / 時移**：`append`、`pltv` 等多種類型
-- 頻道收藏、隱藏分組密碼保護
-- 特殊引擎：TVBus、ForceTech
-
----
-
-## 爬蟲引擎
-
-支援三種語言撰寫爬蟲：
+爬虫可以用三种方式编写：
 
 - Java JAR（DexClassLoader）
 - JavaScript（QuickJS）
 - Python（Chaquopy）
 
-透過 `api` 欄位指定爬蟲，`ext` 欄位傳入初始化參數。完整 API 規格見 [SPIDER.md](docs/SPIDER.md)。
+配置里用 `api` 指定爬虫，用 `ext` 传入初始化参数。
 
----
+## 网络
 
-## 網路功能
+- DNS over HTTPS，可配置 Bootstrap IP
+- HTTP / HTTPS / SOCKS 代理，按 host 规则选择
+- Hosts 覆盖，支持通配符
+- 按 host 注入响应头
+- 广告域名黑名单
+- WebView 嗅探媒体地址，可伪装 UA
 
-- **DoH**：DNS over HTTPS，支援 Bootstrap IP
-- **代理**：HTTP / HTTPS / SOCKS4 / SOCKS5，依 host 正則規則動態選擇
-- **Hosts**：DNS 解析覆蓋，支援萬用字元 `*`
-- **CORS 注入**：依 host 規則在回應中注入自訂標頭
-- **廣告攔截**：`ads` 黑名單，符合域名直接攔截
-- **WebView 嗅探**：Sniffer 以 regex 攔截媒體 URL；支援 UA 偽裝
+## 投放与车机
 
----
+- 手机版作为投放端，扫描局域网 DLNA 设备
+- 电视版作为接收端，接收其他设备的投放
+- 电视版实现 Android Auto 媒体库，可在车机上续播点播记录和切换直播频道
 
-## DLNA 投放
+## 远程控制
 
-- **DMC（投放端）**：手機版，掃描區域網路 DLNA 設備並投放媒體
-- **DMR（被投放端）**：電視版，作為 DLNA Renderer 接收其他設備投放
+应用启动后在本机开启 HTTP 服务，端口从 9978 检测到 9998，用于播放控制、推送字幕和弹幕，以及多设备同步。
 
-使用 JUPnP 3.0.4（UPnP），支援 play / pause / stop / seek / next / repeat 控制，可傳遞自訂 HTTP 標頭（User-Agent、Referer 等）至目標串流。
+## 配置
 
----
+点播配置通过 URL 或本地路径加载，顶层包括：
 
-## Android Auto
+- 点播站点 `sites`、解析规则 `parses`
+- 直播来源 `lives`
+- 网络设置 `doh`、`proxy`、`hosts`、`ads`
 
-電視版支援 Android Auto，PlaybackService 實作 MediaLibraryService，可在車機上瀏覽播放記錄與直播頻道：
-
-- **點播**：歷史記錄條目可直接續播，恢復上次進度
-- **直播**：依分組瀏覽頻道，可直接選台
-- **播放控制**：支援車機端 play / pause / prev / next / stop
-- **懶加載**：App 退出後 Auto 仍保持連線，配置自動重新載入
-
----
-
-## 遠端控制
-
-應用啟動後綁定本地 HTTP 伺服器（NanoHTTPD），埠號從 **9978** 起自動偵測至 **9998**，可用於播放控制、推送字幕 / 彈幕、多裝置同步等。完整端點說明見 [LOCAL.md](docs/LOCAL.md)。
-
----
-
-## 配置說明
-
-Vod 配置為應用主要入口，透過 URL 或本地路徑載入，頂層欄位定義：
-
-- 點播站點（`sites`）、解析規則（`parses`）
-- 直播來源（`lives`）
-- 網路設定（`doh`、`proxy`、`hosts`、`ads`）
-
-Live 配置可內嵌或獨立存放。完整欄位說明見 [CONFIG.md](docs/CONFIG.md)。
-
----
-
-## 延伸閱讀
-
-| 文件                          | 說明                   |
-|-----------------------------|----------------------|
-| [CONFIG.md](docs/CONFIG.md) | Vod / Live 完整配置欄位說明  |
-| [SPIDER.md](docs/SPIDER.md) | Spider 所有方法規格與回傳格式   |
-| [LOCAL.md](docs/LOCAL.md)   | 本地 HTTP API 所有端點完整說明 |
-| [LIVE.md](docs/LIVE.md)     | 直播來源格式完整說明           |
+直播配置可以写在点播配置里，也可以单独存放。

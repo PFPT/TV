@@ -47,7 +47,7 @@
 
         </com.google.android.material.button.MaterialButtonToggleGroup>
 
-        <com.fongmi.android.tv.ui.custom.ColorPickerView
+        <com.pfpt.tv.ui.custom.ColorPickerView
             android:id="@+id/picker"
             android:layout_width="match_parent"
             android:layout_height="220dp"

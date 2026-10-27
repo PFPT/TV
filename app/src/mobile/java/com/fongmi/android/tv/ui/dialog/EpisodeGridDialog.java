@@ -1,5 +1,6 @@
 package com.fongmi.android.tv.ui.dialog;
 
+import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 
@@ -10,6 +11,7 @@ import androidx.fragment.app.FragmentActivity;
 import androidx.viewbinding.ViewBinding;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 
+import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.bean.Episode;
 import com.fongmi.android.tv.databinding.DialogEpisodeGridBinding;
 import com.fongmi.android.tv.ui.adapter.EpisodeAdapter;
@@ -25,6 +27,7 @@ public class EpisodeGridDialog extends BaseBottomSheetDialog {
     private final List<String> titles;
     private DialogEpisodeGridBinding binding;
     private List<Episode> episodes;
+    private Callback callback;
     private boolean reverse;
     private int spanCount;
     private int itemCount;
@@ -48,6 +51,11 @@ public class EpisodeGridDialog extends BaseBottomSheetDialog {
         return this;
     }
 
+    public EpisodeGridDialog callback(Callback callback) {
+        this.callback = callback;
+        return this;
+    }
+
     public void show(FragmentActivity activity) {
         for (Fragment f : activity.getSupportFragmentManager().getFragments()) if (f instanceof EpisodeGridDialog) return;
         show(activity.getSupportFragmentManager(), null);
@@ -60,6 +68,10 @@ public class EpisodeGridDialog extends BaseBottomSheetDialog {
 
     @Override
     protected void initView() {
+        if (callback != null) {
+            binding.title.setText(R.string.download_title);
+            binding.list.setVisibility(android.view.View.VISIBLE);
+        }
         setSpanCount();
         setTitles();
         setPager();
@@ -67,10 +79,18 @@ public class EpisodeGridDialog extends BaseBottomSheetDialog {
 
     @Override
     protected void initEvent() {
-        getChildFragmentManager().setFragmentResultListener("result", this, (requestKey, bundle) -> {
-            ((EpisodeAdapter.OnClickListener) requireActivity()).onItemClick(bundle.getParcelable("episode"));
+        binding.list.setOnClickListener(view -> {
+            if (callback != null) callback.onList();
             dismiss();
         });
+        getChildFragmentManager().setFragmentResultListener("result", this, (requestKey, bundle) -> onEpisodeResult(bundle));
+    }
+
+    private void onEpisodeResult(Bundle bundle) {
+        Episode item = bundle.getParcelable("episode");
+        if (callback != null) callback.onEpisode(item);
+        else ((EpisodeAdapter.OnClickListener) requireActivity()).onItemClick(item);
+        dismiss();
     }
 
     private void setSpanCount() {
@@ -118,5 +138,12 @@ public class EpisodeGridDialog extends BaseBottomSheetDialog {
         public int getItemCount() {
             return titles.size();
         }
+    }
+
+    public interface Callback {
+
+        void onEpisode(Episode item);
+
+        void onList();
     }
 }

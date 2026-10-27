@@ -67,6 +67,7 @@ public class PlaybackService extends MediaLibraryService implements MediaLibrary
     private PlayerManager player;
     private String navigationKey;
     private Player sessionPlayer;
+    private boolean advancing;
 
     public static boolean isRunning() {
         return running;
@@ -127,7 +128,7 @@ public class PlaybackService extends MediaLibraryService implements MediaLibrary
     }
 
     private void handleAction(String action) {
-        if (ActionEvent.PLAY.equals(action)) player.play();
+        if (ActionEvent.PLAY.equals(action)) playOrAdvance();
         else if (ActionEvent.PAUSE.equals(action)) player.pause();
         else if (ActionEvent.PREV.equals(action)) dispatchPrev();
         else if (ActionEvent.NEXT.equals(action)) dispatchNext();
@@ -388,6 +389,15 @@ public class PlaybackService extends MediaLibraryService implements MediaLibrary
     private ForwardingPlayer wrap(Player base) {
         return new ForwardingPlayer(base) {
             @Override
+            public void play() {
+                if (getPlaybackState() == Player.STATE_ENDED && !player.isRepeatOne()) {
+                    advanceAfterEnded();
+                    return;
+                }
+                super.play();
+            }
+
+            @Override
             public void setMediaItem(@NonNull MediaItem item) {
                 interceptItem(item, C.TIME_UNSET);
             }
@@ -517,7 +527,8 @@ public class PlaybackService extends MediaLibraryService implements MediaLibrary
     private final Player.Listener listener = new Player.Listener() {
         @Override
         public void onPlaybackStateChanged(int state) {
-            if (state == Player.STATE_ENDED && !(hasNavigationCallback() && isNavigationOwner())) navigateItem(1);
+            if (state == Player.STATE_READY || state == Player.STATE_BUFFERING) advancing = false;
+            if (state == Player.STATE_ENDED) advanceAfterEnded();
         }
 
         @Override
@@ -576,6 +587,18 @@ public class PlaybackService extends MediaLibraryService implements MediaLibrary
         });
     }
 
+    private void playOrAdvance() {
+        if (player.getPlaybackState() == Player.STATE_ENDED && !player.isRepeatOne()) advanceAfterEnded();
+        else player.play();
+    }
+
+    private void advanceAfterEnded() {
+        if (player.isRepeatOne() || advancing) return;
+        advancing = true;
+        if (hasNavigationCallback() && isNavigationOwner()) dispatch(NavigationCallback::onEnded);
+        else navigateItem(1);
+    }
+
     public interface PlayerCallback {
 
         default void onPrepare() {
@@ -624,6 +647,9 @@ public class PlaybackService extends MediaLibraryService implements MediaLibrary
         }
 
         default void onAudio() {
+        }
+
+        default void onEnded() {
         }
     }
 

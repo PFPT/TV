@@ -43,10 +43,7 @@ import com.fongmi.android.tv.impl.CustomTarget;
 import com.fongmi.android.tv.impl.LiveListener;
 import com.fongmi.android.tv.impl.PassListener;
 import com.fongmi.android.tv.model.LiveViewModel;
-import com.fongmi.android.tv.playback.PlaybackReset;
-import com.fongmi.android.tv.playback.live.LivePlayRequest;
 import com.fongmi.android.tv.playback.live.LivePlaybackController;
-import com.fongmi.android.tv.playback.live.LivePlaybackHost;
 import com.fongmi.android.tv.playback.live.LivePlaybackMedia;
 import com.fongmi.android.tv.player.extractor.Source;
 import com.fongmi.android.tv.service.PlaybackService;
@@ -73,28 +70,27 @@ import com.fongmi.android.tv.utils.Traffic;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnClickListener, ChannelAdapter.OnClickListener, EpgDataAdapter.OnClickListener, CustomKeyDownLive.Listener, CustomLiveListView.Callback, TrackDialog.Listener, PassListener, ConfigListener, LiveListener, LivePlaybackHost {
+public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnClickListener, ChannelAdapter.OnClickListener, EpgDataAdapter.OnClickListener, CustomKeyDownLive.Listener, CustomLiveListView.Callback, TrackDialog.Listener, PassListener, ConfigListener, LiveListener {
 
-    private ActivityLiveBinding mBinding;
-    private ChannelAdapter mChannelAdapter;
+    ActivityLiveBinding mBinding;
+    ChannelAdapter mChannelAdapter;
     private EpgDataAdapter mEpgDataAdapter;
-    private GroupAdapter mGroupAdapter;
+    GroupAdapter mGroupAdapter;
     private LivePlaybackController mLive;
     private Observer<Result> mObserveUrl;
     private CustomKeyDownLive mKeyDown;
     private Observer<Epg> mObserveEpg;
-    private LiveViewModel mViewModel;
+    LiveViewModel mViewModel;
     private String mPlaybackKey;
     private List<Group> mHides;
-    private Channel mChannel;
+    Channel mChannel;
     private View mOldView;
-    private Group mGroup;
-    private Runnable mR0;
+    Group mGroup;
+    Runnable mR0;
     private Runnable mR1;
     private Runnable mR2;
     private Runnable mR3;
@@ -238,7 +234,7 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
 
     private void setViewModel() {
         mViewModel = new ViewModelProvider(this).get(LiveViewModel.class);
-        mLive = mViewModel.createPlaybackController(this);
+        mLive = mViewModel.createPlaybackController(new LivePlaybackBinder(this));
         observeForever(mViewModel.url(), mObserveUrl);
         mViewModel.xml().observe(this, this::setEpg);
         observeForever(mViewModel.epg(), mObserveEpg);
@@ -296,7 +292,7 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
         setWidth(mBinding.group, width);
     }
 
-    private Group setWidth(Group group) {
+    Group setWidth(Group group) {
         int logo = ResUtil.dp2px(60);
         int padding = ResUtil.dp2px(64);
         if (group.isKeep()) group.setWidth(0);
@@ -360,7 +356,7 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
         notifyItemChanged(mBinding.channel, mChannelAdapter);
     }
 
-    private void setSelected(EpgData item) {
+    void setSelected(EpgData item) {
         mEpgDataAdapter.setSelected(item);
         notifyItemChanged(mBinding.epgData, mEpgDataAdapter);
     }
@@ -436,7 +432,7 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
         PlaybackAction.toggleDecode(player());
     }
 
-    private void hideUI() {
+    void hideUI() {
         App.removeCallbacks(mR4);
         if (isGone(mBinding.recycler)) return;
         mBinding.recycler.setVisibility(View.GONE);
@@ -541,7 +537,6 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
         mBinding.channel.requestFocus();
     }
 
-    @Override
     public void showProgress() {
         mBinding.progress.getRoot().setVisibility(View.VISIBLE);
         App.post(mR2, 0);
@@ -555,7 +550,7 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
         Traffic.reset();
     }
 
-    private void showError(String text) {
+    void showError(String text) {
         mBinding.widget.error.setVisibility(View.VISIBLE);
         mBinding.widget.text.setText(text);
         hideProgress();
@@ -585,7 +580,7 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
         mBinding.widget.center.setVisibility(View.GONE);
     }
 
-    private void showInfo() {
+    void showInfo() {
         mBinding.widget.bottom.setVisibility(View.VISIBLE);
         setR3Callback();
         setInfo();
@@ -620,7 +615,7 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
         this.count = 0;
     }
 
-    private void setArtwork() {
+    void setArtwork() {
         ImgUtil.load(this, mChannel.getLogo(), new CustomTarget<>() {
             @Override
             public void onResourceReady(@NonNull Drawable resource, @Nullable Transition<? super Drawable> transition) {
@@ -684,7 +679,7 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
         Keep.delete(item.getName());
     }
 
-    private void setInfo() {
+    void setInfo() {
         mViewModel.getEpg(mChannel);
         mBinding.widget.play.setText("");
         mBinding.widget.name.setMaxEms(48);
@@ -715,103 +710,14 @@ public class LiveActivity extends PlaybackActivity implements GroupAdapter.OnCli
         if (mChannel != null && success) mViewModel.getEpg(mChannel);
     }
 
-    private void start(Result result, long startPositionMs) {
+    void start(Result result, long startPositionMs) {
         mPlaybackKey = result.getRealUrl();
         startPlayer(mPlaybackKey, result, false, getHome().getTimeout(), startPositionMs, buildMetadata());
     }
 
-    private void stopPlayer() {
+    void stopPlayer() {
         player().clear();
         player().stop();
-    }
-
-    @Override
-    public int getGroupCount() {
-        return mGroupAdapter.getItemCount();
-    }
-
-    @Override
-    public int getGroupPosition() {
-        return mBinding.group.getSelectedPosition();
-    }
-
-    @Override
-    public Group getGroup(int position) {
-        return mGroupAdapter.get(position);
-    }
-
-    @Override
-    public boolean isPlayerLive() {
-        return player().isLive();
-    }
-
-    @Override
-    public ZoneId getZoneId() {
-        return mViewModel.getZoneId();
-    }
-
-    @Override
-    public void requestUrl(LivePlayRequest request) {
-        mViewModel.getUrl(request.getChannel(), request.getPosition());
-    }
-
-    @Override
-    public void requestCatchupUrl(LivePlayRequest request) {
-        mViewModel.getUrl(request.getChannel(), request.getCatchupData(), request.getPosition());
-        hideUI();
-    }
-
-    @Override
-    public void stopPlaybackForRefresh() {
-        stopPlayer();
-    }
-
-    @Override
-    public void startPlayback(Result result, long position, Channel channel) {
-        start(result, position);
-    }
-
-    @Override
-    public void resetPlaybackForError(String msg) {
-        PlaybackReset.afterError(player());
-        showError(msg);
-    }
-
-    @Override
-    public void renderGroupSelection(Group group) {
-        mGroup = group;
-        mBinding.group.setSelectedPosition(mGroupAdapter.indexOf(group));
-    }
-
-    @Override
-    public void renderGroupChannels(Group group) {
-        mChannelAdapter.addAll(setWidth(group).getChannel());
-        mBinding.channel.setSelectedPosition(Math.max(group.getPosition(), 0));
-    }
-
-    @Override
-    public void renderChannelSelection(Channel channel) {
-        App.post(mR0, 100);
-        mChannel = channel;
-        setArtwork();
-        showInfo();
-    }
-
-    @Override
-    public void renderLineSelection(Channel channel, boolean show) {
-        if (show) showInfo();
-        else setInfo();
-    }
-
-    @Override
-    public void renderEpgSelection(Channel channel, EpgData data) {
-        setSelected(data);
-    }
-
-    @Override
-    public void showCatchupReady(Channel channel, EpgData data) {
-        mBinding.widget.title.setText(getString(R.string.detail_title, channel.getShow(), data.getTitle()));
-        Notify.show(getString(R.string.play_ready, data.getTitle()));
     }
 
     private void resetAdapter() {

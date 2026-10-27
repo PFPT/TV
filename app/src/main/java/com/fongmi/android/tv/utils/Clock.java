@@ -6,15 +6,17 @@ import com.fongmi.android.tv.App;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
 
 public class Clock {
 
+    private final List<TextView> views;
     private DateTimeFormatter format;
     private Callback callback;
-    private TextView view;
     private Timer timer;
 
     public static Clock create() {
@@ -26,10 +28,16 @@ public class Clock {
     }
 
     public Clock() {
+        this.views = new ArrayList<>();
     }
 
     public Clock view(TextView view) {
-        this.view = view;
+        views.clear();
+        return add(view);
+    }
+
+    public Clock add(TextView view) {
+        if (view != null) views.add(view);
         return this;
     }
 
@@ -43,6 +51,7 @@ public class Clock {
     }
 
     public void start() {
+        stop();
         timer = new Timer();
         timer.schedule(new TimerTask() {
             @Override
@@ -56,7 +65,9 @@ public class Clock {
         try {
             long time = System.currentTimeMillis();
             if (callback != null) callback.onTimeChanged(time);
-            if (view != null) view.setText(format.format(LocalDateTime.now()));
+            if (format == null || views.isEmpty()) return;
+            String text = format.format(LocalDateTime.now());
+            for (TextView view : views) view.setText(text);
         } catch (Exception ignored) {
         }
     }

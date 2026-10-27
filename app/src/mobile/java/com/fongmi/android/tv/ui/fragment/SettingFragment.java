@@ -1,5 +1,6 @@
 package com.fongmi.android.tv.ui.fragment;
 
+import android.graphics.drawable.GradientDrawable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -49,6 +50,7 @@ import org.greenrobot.eventbus.ThreadMode;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class SettingFragment extends BaseFragment implements ConfigListener, SiteListener, LiveListener, ThemeDialog.Listener {
 
@@ -62,7 +64,22 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
     private String getThemeText() {
         int color = Setting.getThemeColor();
         if (color == -1) return getString(R.string.setting_off);
-        return getString(color == 0 ? R.string.setting_auto : R.string.setting_custom);
+        if (color == 0) return getString(R.string.setting_auto);
+        return String.format(Locale.US, "#%06X", color & 0xFFFFFF);
+    }
+
+    private void setThemeDot() {
+        int color = Setting.getThemeColor();
+        int dot = color == -1 ? 0 : color == 0 ? Setting.getWallColor() : color;
+        if (dot == 0) {
+            mBinding.themeColorDot.setVisibility(View.GONE);
+            return;
+        }
+        GradientDrawable circle = new GradientDrawable();
+        circle.setShape(GradientDrawable.OVAL);
+        circle.setColor(dot | 0xFF000000);
+        mBinding.themeColorDot.setBackground(circle);
+        mBinding.themeColorDot.setVisibility(View.VISIBLE);
     }
 
     private int getDohIndex() {
@@ -97,6 +114,7 @@ public class SettingFragment extends BaseFragment implements ConfigListener, Sit
 
     private void setOtherText() {
         mBinding.themeColorText.setText(getThemeText());
+        setThemeDot();
         mBinding.dohText.setText(getDohList()[getDohIndex()]);
         mBinding.incognitoText.setText(Setting.getSwitch(Setting.isIncognito()));
         mBinding.sizeText.setText((size = ResUtil.getStringArray(R.array.select_size))[PlayerSetting.getSize()]);

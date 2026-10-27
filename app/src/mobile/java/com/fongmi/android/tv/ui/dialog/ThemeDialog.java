@@ -1,18 +1,28 @@
 package com.fongmi.android.tv.ui.dialog;
 
+import android.graphics.drawable.GradientDrawable;
+import android.text.Editable;
+import android.view.View;
+
 import androidx.fragment.app.Fragment;
 import androidx.viewbinding.ViewBinding;
 
 import com.fongmi.android.tv.R;
 import com.fongmi.android.tv.databinding.DialogThemeBinding;
 import com.fongmi.android.tv.setting.Setting;
-import com.fongmi.android.tv.ui.adapter.ThemeAdapter;
+import com.fongmi.android.tv.ui.custom.ColorPickerView;
+import com.fongmi.android.tv.ui.custom.CustomTextListener;
+import com.fongmi.android.tv.ui.custom.ThemePalette;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
-public class ThemeDialog extends BaseAlertDialog implements ThemeAdapter.OnClickListener {
+import java.util.Locale;
 
-    private static final int[] COLORS = {-1, 0, 0xFF6750A4, 0xFF3949AB, 0xFF1E88E5, 0xFF00ACC1, 0xFF00897B, 0xFF43A047, 0xFF7CB342, 0xFFFB8C00, 0xFFE53935, 0xFFD81B60, 0xFF8E24AA, 0xFF6D4C41,};
+public class ThemeDialog extends BaseAlertDialog implements ColorPickerView.Listener {
+
+    private static final int DEFAULT_COLOR = 0xFF6750A4;
     private DialogThemeBinding binding;
+    private boolean writingHex;
+    private int mode;
 
     public static void show(Fragment fragment) {
         new ThemeDialog().show(fragment.getChildFragmentManager(), null);
@@ -25,18 +35,100 @@ public class ThemeDialog extends BaseAlertDialog implements ThemeAdapter.OnClick
 
     @Override
     protected MaterialAlertDialogBuilder getBuilder() {
-        return builder().setTitle(R.string.setting_theme_color).setView(getBinding().getRoot());
+        return builder().setTitle(R.string.setting_theme_color).setView(getBinding().getRoot()).setNegativeButton(R.string.dialog_negative, null).setPositiveButton(R.string.dialog_positive, (dialog, which) -> apply());
     }
 
     @Override
     protected void initView() {
-        binding.recycler.setAdapter(new ThemeAdapter(this, COLORS, Setting.getThemeColor()));
+        int stored = Setting.getThemeColor();
+        int seed = stored == -1 || stored == 0 ? seedFallback() : stored;
+        mode = stored == -1 ? -1 : stored == 0 ? 0 : 1;
+        binding.picker.setColor(seed);
+        showHex(seed);
+        showPalette(seed);
+        showCustom(mode > 0);
     }
 
     @Override
-    public void onItemClick(int color) {
+    protected void initEvent() {
+        binding.picker.setListener(this);
+        binding.modeGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+            if (!isChecked) return;
+            if (checkedId == R.id.modeOff) mode = -1;
+            else if (checkedId == R.id.modeAuto) mode = 0;
+            else mode = 1;
+            showCustom(mode > 0);
+        });
+        binding.hex.addTextChangedListener(new CustomTextListener() {
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (writingHex) return;
+                int color = parseHex(s.toString());
+                if (color == 0) return;
+                binding.picker.setColor(color);
+                showPalette(color);
+            }
+        });
+        int stored = Setting.getThemeColor();
+        binding.modeGroup.check(stored == -1 ? R.id.modeOff : stored == 0 ? R.id.modeAuto : R.id.modeCustom);
+    }
+
+    @Override
+    public void onColorChanged(int color) {
+        showHex(color);
+        showPalette(color);
+    }
+
+    private void apply() {
+        int color = mode < 0 ? -1 : mode == 0 ? 0 : binding.picker.getColor();
         ((Listener) requireParentFragment()).setTheme(color);
-        dismiss();
+    }
+
+    private void showCustom(boolean custom) {
+        int visibility = custom ? View.VISIBLE : View.GONE;
+        binding.picker.setVisibility(visibility);
+        binding.hexInput.setVisibility(visibility);
+        binding.palette.setVisibility(visibility);
+    }
+
+    private void showHex(int color) {
+        writingHex = true;
+        String text = String.format(Locale.US, "#%06X", color & 0xFFFFFF);
+        binding.hex.setText(text);
+        binding.hex.setSelection(text.length());
+        writingHex = false;
+    }
+
+    private void showPalette(int color) {
+        ThemePalette palette = ThemePalette.of(color, getResources().getConfiguration().uiMode);
+        paintSwatch(binding.swatchPrimary, palette.primary);
+        paintSwatch(binding.swatchSecondary, palette.secondary);
+        paintSwatch(binding.swatchTertiary, palette.tertiary);
+        paintSwatch(binding.swatchSurface, palette.surface);
+        paintSwatch(binding.swatchBackground, palette.background);
+    }
+
+    private void paintSwatch(View view, int color) {
+        GradientDrawable circle = new GradientDrawable();
+        circle.setShape(GradientDrawable.OVAL);
+        circle.setColor(color);
+        view.setBackground(circle);
+    }
+
+    private int seedFallback() {
+        int wall = Setting.getWallColor();
+        return wall != 0 ? wall : DEFAULT_COLOR;
+    }
+
+    private int parseHex(String text) {
+        String value = text.trim();
+        if (value.startsWith("#")) value = value.substring(1);
+        if (value.length() != 6) return 0;
+        try {
+            return 0xFF000000 | Integer.parseInt(value, 16);
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
     }
 
     public interface Listener {
@@ -44,4 +136,3 @@ public class ThemeDialog extends BaseAlertDialog implements ThemeAdapter.OnClick
         void setTheme(int color);
     }
 }
-

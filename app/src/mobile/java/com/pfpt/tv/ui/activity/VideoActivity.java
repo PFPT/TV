@@ -950,13 +950,11 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void setComposeControlVisible(boolean open) {
-        int chrome = open && !isLock() ? View.VISIBLE : View.GONE;
-        int lock = open && isFullscreen() ? View.VISIBLE : View.GONE;
         mBinding.controlDim.setVisibility(open ? View.VISIBLE : View.GONE);
-        mBinding.controlTopCompose.setVisibility(chrome);
-        mBinding.controlCenterCompose.setVisibility(chrome);
-        mBinding.controlBottomCompose.setVisibility(chrome);
-        mBinding.controlLockCompose.setVisibility(lock);
+        mBinding.controlTopCompose.setVisibility(View.VISIBLE);
+        mBinding.controlCenterCompose.setVisibility(View.VISIBLE);
+        mBinding.controlBottomCompose.setVisibility(View.VISIBLE);
+        mBinding.controlLockCompose.setVisibility(View.VISIBLE);
     }
 
     private void padComposeControls(boolean pad) {

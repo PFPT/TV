@@ -1,9 +1,37 @@
 package com.pfpt.tv.ui.vod.compose
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pfpt.tv.playback.vod.session.VodSessionViewModel
+
+private const val CONTROL_MOTION_MS = 200
+
+private val controlFadeIn = fadeIn(animationSpec = tween(CONTROL_MOTION_MS, easing = FastOutSlowInEasing))
+private val controlFadeOut = fadeOut(animationSpec = tween(CONTROL_MOTION_MS, easing = FastOutSlowInEasing))
+private val controlSlideInFromTop = slideInVertically(
+    animationSpec = tween(CONTROL_MOTION_MS, easing = FastOutSlowInEasing),
+    initialOffsetY = { -it / 4 },
+)
+private val controlSlideOutToTop = slideOutVertically(
+    animationSpec = tween(CONTROL_MOTION_MS, easing = FastOutSlowInEasing),
+    targetOffsetY = { -it / 4 },
+)
+private val controlSlideInFromBottom = slideInVertically(
+    animationSpec = tween(CONTROL_MOTION_MS, easing = FastOutSlowInEasing),
+    initialOffsetY = { it / 4 },
+)
+private val controlSlideOutToBottom = slideOutVertically(
+    animationSpec = tween(CONTROL_MOTION_MS, easing = FastOutSlowInEasing),
+    targetOffsetY = { it / 4 },
+)
 
 fun interface VodIndexClick {
     fun onClick(index: Int)
@@ -82,7 +110,11 @@ fun setVodControlBars(
 ) {
     top.setContent {
         val state by session.uiState.collectAsStateWithLifecycle()
-        if (state.controlsVisible && !state.locked) {
+        AnimatedVisibility(
+            visible = state.controlsVisible && !state.locked,
+            enter = controlFadeIn + controlSlideInFromTop,
+            exit = controlFadeOut + controlSlideOutToTop,
+        ) {
             VodControlTopBar(
                 state = state,
                 onBack = onBack::run,
@@ -95,7 +127,11 @@ fun setVodControlBars(
     }
     center.setContent {
         val state by session.uiState.collectAsStateWithLifecycle()
-        if (state.controlsVisible && !state.locked) {
+        AnimatedVisibility(
+            visible = state.controlsVisible && !state.locked,
+            enter = controlFadeIn,
+            exit = controlFadeOut,
+        ) {
             VodControlCenter(
                 state = state,
                 onPlay = onPlay::run,
@@ -106,13 +142,21 @@ fun setVodControlBars(
     }
     lock.setContent {
         val state by session.uiState.collectAsStateWithLifecycle()
-        if (state.controlsVisible && state.fullscreen) {
+        AnimatedVisibility(
+            visible = state.controlsVisible && state.fullscreen,
+            enter = controlFadeIn,
+            exit = controlFadeOut,
+        ) {
             VodControlLock(locked = state.locked, onLock = onLock::run)
         }
     }
     bottom.setContent {
         val state by session.uiState.collectAsStateWithLifecycle()
-        if (state.controlsVisible && !state.locked) {
+        AnimatedVisibility(
+            visible = state.controlsVisible && !state.locked,
+            enter = controlFadeIn + controlSlideInFromBottom,
+            exit = controlFadeOut + controlSlideOutToBottom,
+        ) {
             VodControlBottomBar(
                 state = state,
                 onSeek = onSeek::onSeek,

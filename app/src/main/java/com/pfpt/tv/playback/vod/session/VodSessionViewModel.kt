@@ -42,10 +42,6 @@ class VodSessionViewModel : ViewModel() {
             current.downloadReady,
             current.siteName,
             current.remark,
-            current.flags,
-            current.episodes,
-            current.qualities,
-            current.qualityIndex,
         )
         _uiState.value = mapped.copy(
             title = mapped.title.ifEmpty { current.title },
@@ -117,22 +113,6 @@ class VodSessionViewModel : ViewModel() {
                 positionMs = positionMs,
                 durationMs = durationMs,
                 speed = speed,
-            )
-        }
-    }
-
-    fun updateCatalog(
-        flags: List<VodFlagItem>,
-        episodes: List<VodEpisodeItem>,
-        qualities: List<String>,
-        qualityIndex: Int,
-    ) {
-        _uiState.update {
-            it.copy(
-                flags = flags,
-                episodes = episodes,
-                qualities = qualities,
-                qualityIndex = qualityIndex,
             )
         }
     }

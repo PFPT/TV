@@ -12,10 +12,6 @@ object VodUiStateMapper {
         downloadReady: VodDownloadReadySummary?,
         siteName: String = "",
         remark: String = "",
-        flags: List<VodFlagItem> = emptyList(),
-        episodes: List<VodEpisodeItem> = emptyList(),
-        qualities: List<String> = emptyList(),
-        qualityIndex: Int = 0,
     ): VodUiState {
         if (state == null) {
             return VodUiState(
@@ -24,18 +20,40 @@ object VodUiStateMapper {
                 remark = remark,
                 errorMessage = errorMessage,
                 downloadReady = downloadReady,
-                flags = flags,
-                episodes = episodes,
-                qualities = qualities,
-                qualityIndex = qualityIndex,
             )
         }
         val history = state.history
         val title = history?.vodName.orEmpty()
-        val flagName = if (state.hasFlags()) state.flag?.flag.orEmpty() else ""
-        val episodeName = if (state.hasEpisode()) state.episode?.name.orEmpty() else ""
+        val flagName = if (state.hasFlags()) state.getFlag().getFlag() else ""
+        val episodeName = if (state.hasEpisode()) state.getEpisode().getName() else ""
         val opening = history?.opening ?: 0L
         val ending = history?.ending ?: 0L
+        val flags = state.getFlags().map { flag ->
+            val show = flag.getShow()
+            VodFlagItem(
+                if (show.isNullOrEmpty()) flag.getFlag() else show,
+                flag.isSelected(),
+            )
+        }
+        val episodes = if (state.hasFlags()) {
+            state.getFlag().getEpisodes().map {
+                VodEpisodeItem(
+                    it.getDesc().orEmpty() + it.getName().orEmpty(),
+                    it.isSelected(),
+                    it.getUrl().orEmpty(),
+                )
+            }
+        } else {
+            emptyList()
+        }
+        val url = state.getQuality().getUrl()
+        val showQualities = state.hasEpisode() && state.getEpisode().isSelected() && url.isMulti()
+        val qualities = if (showQualities) {
+            (0 until url.getValues().size).map { url.n(it).orEmpty() }
+        } else {
+            emptyList()
+        }
+        val qualityIndex = if (showQualities) url.getPosition() else 0
         return VodUiState(
             title = title,
             siteName = siteName,

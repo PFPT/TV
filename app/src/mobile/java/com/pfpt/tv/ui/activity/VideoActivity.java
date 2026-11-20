@@ -94,8 +94,6 @@ import com.pfpt.tv.playback.vod.VodPlaybackController;
 import com.pfpt.tv.playback.vod.VodPlaybackMedia;
 import com.pfpt.tv.playback.vod.session.DownloadResolveOutcome;
 import com.pfpt.tv.playback.vod.session.VodDownloadResolver;
-import com.pfpt.tv.playback.vod.session.VodEpisodeItem;
-import com.pfpt.tv.playback.vod.session.VodFlagItem;
 import com.pfpt.tv.playback.vod.session.VodSessionViewModel;
 import com.pfpt.tv.ui.vod.compose.VodComposeHostKt;
 import com.pfpt.tv.ui.vod.compose.VodDownloadConfirm;
@@ -558,25 +556,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     void syncCatalog() {
-        if (mSession == null || mFlagAdapter == null || mEpisodeAdapter == null || mQualityAdapter == null) return;
-        List<VodFlagItem> flags = new ArrayList<>();
-        for (int i = 0; i < mFlagAdapter.getItemCount(); i++) {
-            Flag flag = mFlagAdapter.get(i);
-            flags.add(new VodFlagItem(flag.getShow(), flag.isSelected()));
-        }
-        List<VodEpisodeItem> episodes = new ArrayList<>();
-        for (Episode episode : mEpisodeAdapter.getItems()) {
-            episodes.add(new VodEpisodeItem(episode.getDesc() + episode.getName(), episode.isSelected(), episode.getUrl()));
-        }
-        List<String> qualities = new ArrayList<>();
-        int qualityIndex = 0;
-        if (mBinding.qualityText.getVisibility() == View.VISIBLE) {
-            Url url = mQualityAdapter.getResult().getUrl();
-            int count = url.getValues().size();
-            for (int i = 0; i < count; i++) qualities.add(url.n(i));
-            if (count > 0) qualityIndex = url.getPosition();
-        }
-        mSession.updateCatalog(flags, episodes, qualities, qualityIndex);
+        if (mSession == null) return;
+        mSession.refresh();
     }
 
     @Override

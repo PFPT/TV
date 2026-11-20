@@ -1,6 +1,10 @@
 package com.pfpt.tv.playback.vod.session
 
+import com.pfpt.tv.bean.Episode
+import com.pfpt.tv.bean.Flag
 import com.pfpt.tv.bean.History
+import com.pfpt.tv.bean.Result
+import com.pfpt.tv.bean.Url
 import com.pfpt.tv.playback.vod.VodPlaybackState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -15,6 +19,10 @@ class VodUiStateMapperTest {
         assertTrue(ui.kept)
         assertEquals("err", ui.errorMessage)
         assertEquals("", ui.title)
+        assertTrue(ui.flags.isEmpty())
+        assertTrue(ui.episodes.isEmpty())
+        assertTrue(ui.qualities.isEmpty())
+        assertEquals(0, ui.qualityIndex)
     }
 
     @Test
@@ -83,21 +91,76 @@ class VodUiStateMapperTest {
     }
 
     @Test
-    fun mapperKeepsCatalogSelection() {
-        val ui = VodUiStateMapper.from(
-            null,
-            kept = false,
-            errorMessage = null,
-            downloadReady = null,
-            flags = listOf(VodFlagItem("Line A", false), VodFlagItem("Line B", true)),
-            episodes = listOf(VodEpisodeItem("EP1", true, "http://ep")),
-            qualities = listOf("1080", "720"),
-            qualityIndex = 1,
-        )
-        assertEquals(true, ui.flags[1].selected)
+    fun derivesFlagsFromPlaybackState() {
+        val state = VodPlaybackState()
+        val flagA = Flag("Line A")
+        val flagB = Flag("Line B")
+        flagB.setSelected(flagB)
+        flagA.setSelected(flagB)
+        state.getFlags().add(flagA)
+        state.getFlags().add(flagB)
+        val ui = VodUiStateMapper.from(state, false, null, null)
+        assertEquals(2, ui.flags.size)
+        assertEquals("Line A", ui.flags[0].name)
         assertEquals(false, ui.flags[0].selected)
-        assertEquals("EP1", ui.episodes[0].name)
+        assertEquals("Line B", ui.flags[1].name)
+        assertEquals(true, ui.flags[1].selected)
+    }
+
+    @Test
+    fun derivesEpisodesDescPlusNameFromSelectedFlag() {
+        val state = VodPlaybackState()
+        val flag = Flag("line")
+        flag.setSelected(flag)
+        val episode = Episode.create("Name", "Desc", "http://ep")
+        episode.setSelected(true)
+        flag.getEpisodes().add(episode)
+        state.getFlags().add(flag)
+        val ui = VodUiStateMapper.from(state, false, null, null)
+        assertEquals(1, ui.episodes.size)
+        assertEquals("DescName", ui.episodes[0].name)
+        assertEquals(true, ui.episodes[0].selected)
+        assertEquals("http://ep", ui.episodes[0].url)
+    }
+
+    @Test
+    fun derivesMultiQualityLabelsAndIndex() {
+        val state = VodPlaybackState()
+        val flag = Flag("line")
+        flag.setSelected(flag)
+        val episode = Episode.create("Name", "Desc", "http://ep")
+        episode.setSelected(true)
+        flag.getEpisodes().add(episode)
+        state.getFlags().add(flag)
+        state.setQuality(resultWithUrl(Url.create().add("1080", "u1").add("720", "u2").set(1)))
+        val ui = VodUiStateMapper.from(state, false, null, null)
+        assertEquals(listOf("1080", "720"), ui.qualities)
         assertEquals(1, ui.qualityIndex)
+    }
+
+    @Test
+    fun multiQualityWithoutSelectedEpisodeYieldsEmptyQualities() {
+        val state = VodPlaybackState()
+        state.setQuality(resultWithUrl(Url.create().add("1080", "u1").add("720", "u2").set(1)))
+        val ui = VodUiStateMapper.from(state, false, null, null)
+        assertTrue(ui.qualities.isEmpty())
+        assertEquals(0, ui.qualityIndex)
+    }
+
+    @Test
+    fun singleQualityYieldsEmptyQualities() {
+        val state = VodPlaybackState()
+        state.setQuality(resultWithUrl(Url.create().add("1080", "u1")))
+        val ui = VodUiStateMapper.from(state, false, null, null)
+        assertTrue(ui.qualities.isEmpty())
+        assertEquals(0, ui.qualityIndex)
+    }
+
+    @Test
+    fun noFlagsYieldsEmptyEpisodes() {
+        val state = VodPlaybackState()
+        val ui = VodUiStateMapper.from(state, false, null, null)
+        assertTrue(ui.episodes.isEmpty())
     }
 
     @Test
@@ -151,5 +214,13 @@ class VodUiStateMapperTest {
         assertEquals(1.5f, restored.speed, 0f)
         assertEquals(true, restored.danmakuOn)
         assertEquals(true, restored.showDanmaku)
+    }
+
+    private fun resultWithUrl(url: Url): Result {
+        val result = Result.empty()
+        val field = Result::class.java.getDeclaredField("url")
+        field.isAccessible = true
+        field.set(result, url)
+        return result
     }
 }

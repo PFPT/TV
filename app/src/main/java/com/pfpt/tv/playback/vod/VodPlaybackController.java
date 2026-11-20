@@ -108,6 +108,8 @@ public class VodPlaybackController {
         for (Flag flag : state.getFlags()) flag.setSelected(selected);
         host.renderFlagSelection(selected);
         host.renderEpisodes(selected.getEpisodes());
+        state.setQuality(Result.empty());
+        state.setQualityPosition(0);
         host.renderQualityVisible(false);
         seamless(selected);
     }

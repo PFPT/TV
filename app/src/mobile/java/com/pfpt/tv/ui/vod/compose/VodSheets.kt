@@ -69,6 +69,7 @@ enum class VodSheetKind {
     EpisodeDownload,
     DownloadConfirm,
     Info,
+    ControlMore,
 }
 
 data class VodDownloadConfirm(
@@ -91,6 +92,20 @@ fun interface VodDownloadSend {
 
 fun interface VodInfoShare {
     fun onShare(title: String)
+}
+
+fun interface VodControlMoreAction {
+    fun onAction(id: Int)
+}
+
+object VodControlMoreIds {
+    const val TEXT = 1
+    const val AUDIO = 2
+    const val VIDEO = 3
+    const val DANMAKU = 4
+    const val REPLAY = 5
+    const val REFRESH = 6
+    const val ALL_SETTINGS = 7
 }
 
 class VodSheetController {
@@ -131,6 +146,12 @@ class VodSheetController {
         kind = VodSheetKind.Info
     }
 
+    fun showControlMore() {
+        download = null
+        info = null
+        kind = VodSheetKind.ControlMore
+    }
+
     fun dismiss() {
         kind = VodSheetKind.None
         download = null
@@ -159,6 +180,7 @@ fun ComposeView.setVodSheetHost(
     onDownloadList: Runnable,
     onDownloadConfirm: VodDownloadSend,
     onInfoShare: VodInfoShare,
+    onControlMore: VodControlMoreAction,
 ) {
     setContent {
         val ui by session.uiState.collectAsStateWithLifecycle()
@@ -183,7 +205,15 @@ fun ComposeView.setVodSheetHost(
                 onDismiss = controller::dismiss,
             )
             VodSheetKind.DownloadConfirm -> {
-                val confirm = controller.download
+                val ready = ui.downloadReady
+                val confirm = controller.download ?: ready?.let {
+                    VodDownloadConfirm(
+                        fileName = it.fileName,
+                        url = it.url,
+                        durationMs = it.durationMs,
+                        headers = it.headers,
+                    )
+                }
                 if (confirm != null) {
                     DownloadConfirmSheet(
                         confirm = confirm,
@@ -202,6 +232,12 @@ fun ComposeView.setVodSheetHost(
                     )
                 }
             }
+            VodSheetKind.ControlMore -> ControlMoreSheet(
+                onAction = { id ->
+                    onControlMore.onAction(id)
+                },
+                onDismiss = controller::dismiss,
+            )
         }
     }
 }
@@ -511,4 +547,65 @@ fun InfoSheet(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ControlMoreSheet(
+    onAction: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val dismiss = rememberHideThenDismiss(sheetState, onDismiss)
+    val scope = rememberCoroutineScope()
+    fun run(id: Int) {
+        scope.launch {
+            sheetState.hide()
+            onDismiss()
+            onAction(id)
+        }
+    }
+    ModalBottomSheet(
+        onDismissRequest = dismiss,
+        sheetState = sheetState,
+        containerColor = SheetContainer,
+        contentColor = Color.White,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.control_more),
+                color = Color.White,
+                fontSize = 16.sp,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+            )
+            ControlMoreRow(R.string.play_track_text) { run(VodControlMoreIds.TEXT) }
+            ControlMoreRow(R.string.play_track_audio) { run(VodControlMoreIds.AUDIO) }
+            ControlMoreRow(R.string.play_track_video) { run(VodControlMoreIds.VIDEO) }
+            ControlMoreRow(R.string.danmaku) { run(VodControlMoreIds.DANMAKU) }
+            ControlMoreRow(R.string.play_replay) { run(VodControlMoreIds.REPLAY) }
+            ControlMoreRow(R.string.play_reset) { run(VodControlMoreIds.REFRESH) }
+            ControlMoreRow(R.string.play_config) { run(VodControlMoreIds.ALL_SETTINGS) }
+        }
+    }
+}
+
+@Composable
+private fun ControlMoreRow(
+    labelRes: Int,
+    onClick: () -> Unit,
+) {
+    Text(
+        text = stringResource(labelRes),
+        color = Color.White,
+        fontSize = 15.sp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 14.dp),
+    )
 }

@@ -42,12 +42,6 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <include
-            android:id="@+id/widget"
-            layout="@layout/view_widget_vod"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-
         <androidx.compose.ui.platform.ComposeView
             android:id="@+id/controlTopCompose"
             android:layout_width="match_parent"

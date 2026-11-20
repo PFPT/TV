@@ -13,10 +13,6 @@ fun VodScreen(
     onTitleLongClick: () -> Unit,
     onSiteClick: () -> Unit = {},
     onRemarkClick: () -> Unit = {},
-    onFlagClick: (Int) -> Unit = {},
-    onEpisodeClick: (Int) -> Unit = {},
-    onQualityClick: (Int) -> Unit = {},
-    showCatalog: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -28,37 +24,5 @@ fun VodScreen(
             onSiteClick = onSiteClick,
             onRemarkClick = onRemarkClick,
         )
-        if (showCatalog) {
-            VodCatalog(
-                state = state,
-                onFlagClick = onFlagClick,
-                onEpisodeClick = onEpisodeClick,
-                onQualityClick = onQualityClick,
-            )
-        }
     }
-}
-
-@Composable
-fun VodCatalog(
-    state: VodUiState,
-    onFlagClick: (Int) -> Unit,
-    onEpisodeClick: (Int) -> Unit,
-    onQualityClick: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    VodFlagEpisodeSection(
-        flags = state.flags,
-        episodes = state.episodes,
-        onFlagClick = onFlagClick,
-        onEpisodeClick = onEpisodeClick,
-        modifier = modifier,
-        between = {
-            VodQualityRow(
-                qualities = state.qualities,
-                qualityIndex = state.qualityIndex,
-                onQualityClick = onQualityClick,
-            )
-        },
-    )
 }

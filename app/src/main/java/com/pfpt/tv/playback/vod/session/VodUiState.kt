@@ -3,6 +3,8 @@ package com.pfpt.tv.playback.vod.session
 data class VodDownloadReadySummary(
     val fileName: String = "",
     val url: String = "",
+    val durationMs: Long = 0L,
+    val headers: Map<String, String> = emptyMap(),
 )
 
 data class VodFlagItem(

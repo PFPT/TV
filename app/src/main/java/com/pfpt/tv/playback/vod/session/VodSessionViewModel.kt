@@ -121,12 +121,6 @@ class VodSessionViewModel : ViewModel() {
         }
     }
 
-    fun updateDanmakuChrome(show: Boolean, on: Boolean) {
-        _uiState.update {
-            it.copy(showDanmaku = show, danmakuOn = on)
-        }
-    }
-
     fun updateControlVisibility(
         showCast: Boolean,
         showPip: Boolean,
@@ -241,10 +235,26 @@ class VodSessionViewModel : ViewModel() {
         fileName: String,
     ): DownloadResolveOutcome.Ready? {
         val ready = VodDownloadResolver.fromPlayer(url, headers) ?: return null
-        _uiState.update {
-            it.copy(downloadReady = VodDownloadReadySummary(fileName = fileName, url = ready.url))
-        }
+        presentDownloadConfirm(fileName, ready.url, 0L, ready.headers)
         return ready
+    }
+
+    fun presentDownloadConfirm(
+        fileName: String,
+        url: String,
+        durationMs: Long,
+        headers: Map<String, String>?,
+    ) {
+        _uiState.update {
+            it.copy(
+                downloadReady = VodDownloadReadySummary(
+                    fileName = fileName,
+                    url = url,
+                    durationMs = durationMs,
+                    headers = headers?.toMap() ?: emptyMap(),
+                ),
+            )
+        }
     }
 
     fun resolveDownloadResult(result: Result): DownloadResolveOutcome {

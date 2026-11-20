@@ -40,7 +40,7 @@ class VodPlaybackBinder extends AbstractVodPlaybackBinder {
         activity.mBinding.swipeLayout.setRefreshing(true);
         activity.mBinding.swipeLayout.setEnabled(false);
         activity.mBinding.scroll.scrollTo(0, 0);
-        activity.mClock.setCallback(null);
+        activity.mProgressClock.setCallback(null);
         activity.updateNavigationKey();
         activity.player().reset();
         activity.player().stop();
@@ -49,7 +49,7 @@ class VodPlaybackBinder extends AbstractVodPlaybackBinder {
     @Override
     public void resetPlaybackForError(String msg) {
         activity.mBinding.swipeLayout.setEnabled(true);
-        PlaybackReset.afterError(activity.player(), () -> activity.mClock.setCallback(null));
+        PlaybackReset.afterError(activity.player(), () -> activity.mProgressClock.setCallback(null));
         activity.showError(msg);
     }
 

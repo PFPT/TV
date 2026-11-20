@@ -93,11 +93,13 @@ import com.pfpt.tv.playback.PlaybackOrientation;
 import com.pfpt.tv.playback.vod.VodPlaybackActivityAccess;
 import com.pfpt.tv.playback.vod.VodPlaybackController;
 import com.pfpt.tv.playback.vod.VodPlaybackMedia;
+import com.pfpt.tv.playback.vod.VodPlaybackState;
 import com.pfpt.tv.player.PlayerManager;
 import com.pfpt.tv.playback.vod.session.DownloadResolveOutcome;
 import com.pfpt.tv.playback.vod.session.VodDownloadResolver;
 import com.pfpt.tv.playback.vod.session.VodSessionViewModel;
 import com.pfpt.tv.ui.vod.compose.VodComposeHostKt;
+import com.pfpt.tv.ui.vod.compose.VodControlMoreIds;
 import com.pfpt.tv.ui.vod.compose.VodDownloadConfirm;
 import com.pfpt.tv.ui.vod.compose.VodSheetController;
 import com.pfpt.tv.ui.vod.compose.VodSheetsKt;
@@ -163,7 +165,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     private Runnable mR2;
     private Runnable mR3;
     Runnable mR4;
-    Clock mClock;
+    Clock mProgressClock;
     private PiP mPiP;
 
     public static void push(FragmentActivity activity, String text) {
@@ -300,7 +302,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
 
     @Override
     public void clearClockCallback() {
-        mClock.setCallback(null);
+        mProgressClock.setCallback(null);
     }
 
     @Override
@@ -314,7 +316,8 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private Episode getEpisode() {
-        return mEpisodeAdapter.isEmpty() ? new Episode() : mEpisodeAdapter.getActivated();
+        VodPlaybackState state = mViewModel.getPlaybackState();
+        return state.hasEpisode() ? state.getEpisode() : new Episode();
     }
 
     @Override
@@ -394,10 +397,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         mObserveDetail = this::onDetailObserved;
         mObservePlayer = this::onPlayerObserved;
         mObserveSearch = this::onSearchObserved;
-        mClock = Clock.create().format("HH:mm");
-        mBinding.widget.clock.setVisibility(View.GONE);
-        mBinding.widget.playInfo.setVisibility(View.GONE);
-        mBinding.widget.error.setVisibility(View.GONE);
+        mProgressClock = Clock.create().format("HH:mm");
         mR1 = this::hideControl;
         mR2 = this::setTraffic;
         mR3 = this::setOrient;
@@ -475,11 +475,11 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         mViewModel = new ViewModelProvider(this).get(VideoViewModel.class);
         mSession = new ViewModelProvider(this).get(VodSessionViewModel.class);
         mSession.bind(mViewModel.getPlaybackState());
-        VodComposeHostKt.setVodScreen(mBinding.detailCompose, mSession, this::onKeep, this::onName, () -> onChange(), this::onComposeSiteClick, this::onComposeRemarkClick, this::onComposeFlag, this::onComposeEpisode, this::onComposeQuality);
+        VodComposeHostKt.setVodScreen(mBinding.detailCompose, mSession, this::onKeep, this::onName, () -> onChange(), this::onComposeSiteClick, this::onComposeRemarkClick);
         VodComposeHostKt.setVodFlags(mBinding.flagCompose, mSession, this::onComposeFlag);
         VodComposeHostKt.setVodQualities(mBinding.qualityCompose, mSession, this::onComposeQuality);
         VodComposeHostKt.setVodEpisodes(mBinding.episodeCompose, mSession, this::onComposeEpisode);
-        VodSheetsKt.setVodSheetHost(mBinding.sheetCompose, mSession, sheetController, this::onSheetPlayEpisode, this::onSheetDownloadEpisode, this::onSheetDownloadList, this::onSheetDownloadConfirm, this::onSheetInfoShare);
+        VodSheetsKt.setVodSheetHost(mBinding.sheetCompose, mSession, sheetController, this::onSheetPlayEpisode, this::onSheetDownloadEpisode, this::onSheetDownloadList, this::onSheetDownloadConfirm, this::onSheetInfoShare, this::onSheetControlMore);
         VodComposeHostKt.setVodControlBars(mBinding.controlTopCompose, mBinding.controlCenterCompose, mBinding.controlLockCompose, mBinding.controlBottomCompose, mSession, this::onBack, this::checkPlay, this::checkNext, this::checkPrev, this::onLock, this::onKeep, this::enterFullscreen, this::onSetting, this::onComposeSeek, this::onComposeScrub, this::onCast, this::onPip, this::onRotate, this::onDanmakuShow);
         VodComposeHostKt.setVodGestureLayer(mBinding.gestureCompose, mSession, this::onComposeBrightness, this::onComposeVolume, this::onComposeSeekPreview, this::onComposeSeekEnd, this::onSingleTap, this::onDoubleTap, this::onSpeedUp, this::onSpeedEnd, this::onComposeFlingUp, this::onComposeFlingDown, this::onComposeScale, this::onComposeTouchEnd);
         observeForever(mViewModel.getResult(), mObserveDetail);
@@ -620,17 +620,26 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void onComposeFlag(int index) {
-        if (index < 0 || index >= mFlagAdapter.getItemCount()) return;
-        onItemClick(mFlagAdapter.get(index));
+        List<Flag> flags = mViewModel.getPlaybackState().getFlags();
+        if (index < 0 || index >= flags.size()) return;
+        onItemClick(flags.get(index));
     }
 
     private void onComposeEpisode(int index) {
-        if (index < 0 || index >= mEpisodeAdapter.getItemCount()) return;
-        onItemClick(mEpisodeAdapter.getItems().get(index));
+        VodPlaybackState state = mViewModel.getPlaybackState();
+        if (!state.hasFlags()) return;
+        List<Episode> episodes = state.getFlag().getEpisodes();
+        if (index < 0 || index >= episodes.size()) return;
+        onItemClick(episodes.get(index));
     }
 
     private void onComposeQuality(int index) {
-        mQualityAdapter.select(index);
+        Result quality = mViewModel.getPlaybackState().getQuality();
+        if (quality == null) return;
+        Url url = quality.getUrl();
+        if (url == null || index < 0 || index >= url.getValues().size()) return;
+        url.set(index);
+        onItemClick(quality);
     }
 
     void syncCatalog() {
@@ -741,6 +750,11 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void onSetting() {
+        ensureSheetHost();
+        sheetController.showControlMore();
+    }
+
+    private void onAllSettings() {
         ControlDialog.create().parse(isUseParse()).player(player()).show(this);
     }
 
@@ -809,7 +823,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
 
     @Override
     public void onDecode() {
-        mClock.setCallback(null);
+        mProgressClock.setCallback(null);
         PlaybackAction.toggleDecode(player());
         setR1Callback();
     }
@@ -930,14 +944,11 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     void showError(String text) {
-        mBinding.widget.error.setVisibility(View.GONE);
         if (mSession != null) mSession.setErrorMessage(text);
         hideProgress();
     }
 
     private void hideError() {
-        mBinding.widget.error.setVisibility(View.GONE);
-        mBinding.widget.error.setText("");
         if (mSession != null) mSession.setErrorMessage(null);
     }
 
@@ -972,26 +983,25 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     private void showControl() {
         if (service() == null || isInPictureInPictureMode()) return;
         setComposeControlVisible(true);
-        syncComposeChrome(true);
-        updatePlayInfo();
+        applyChromeUi(true);
         setR1Callback();
     }
 
     private void hideControl() {
         setComposeControlVisible(false);
-        syncComposeChrome(false);
-        updatePlayInfo();
+        applyChromeUi(false);
         App.removeCallbacks(mR1);
     }
 
     private void updatePlayInfo() {
-        mBinding.widget.playInfo.setVisibility(View.GONE);
+        applyChromeUi(isControlOpen());
+    }
+
+    private void applyChromeUi(boolean controlsVisible) {
         boolean fullscreen = isFullscreen() && !isInPictureInPictureMode();
         if (fullscreen && !isRotate()) setPadding(mBinding.gestureCompose);
         else noPadding(mBinding.gestureCompose);
-        if (mSession != null) {
-            syncComposeChrome(isControlOpen());
-        }
+        syncComposeChrome(controlsVisible);
     }
 
     private void hideSheet() {
@@ -1164,18 +1174,18 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         switch (state) {
             case Player.STATE_BUFFERING:
                 showProgress();
-                mClock.setCallback(null);
+                mProgressClock.setCallback(null);
                 break;
             case Player.STATE_READY:
                 hideProgress();
                 checkControl();
                 player().reset();
-                mClock.setCallback(this);
+                mProgressClock.setCallback(this);
                 break;
             case Player.STATE_ENDED:
                 hideProgress();
                 setR1Callback();
-                mClock.setCallback(null);
+                mProgressClock.setCallback(null);
                 break;
         }
     }
@@ -1337,45 +1347,46 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     @Override
     public void onSpeedUp() {
         if (!player().isPlaying()) return;
-        mBinding.widget.speed.setVisibility(View.GONE);
         mSession.showSpeedHud();
         PlaybackAction.setSpeed(player(), PlayerSetting.getSpeed());
     }
 
     @Override
     public void onSpeedEnd() {
-        mBinding.widget.speed.setVisibility(View.GONE);
         mSession.clearGestureHud();
         PlaybackAction.setSpeed(player(), mHistory.getSpeed());
     }
 
     @Override
     public void onBright(int progress) {
-        mBinding.widget.bright.setVisibility(View.GONE);
         mSession.updateGestureHud(true, progress, false, 0);
     }
 
     @Override
     public void onVolume(int progress) {
-        mBinding.widget.volume.setVisibility(View.GONE);
         mSession.updateGestureHud(false, 0, true, progress);
     }
 
     @Override
     public void onFlingUp() {
-        if (mEpisodeAdapter.getItemCount() == 1) onRefresh();
+        if (episodeCount() <= 1) onRefresh();
         else mVod.nextEpisode(true);
     }
 
     @Override
     public void onFlingDown() {
-        if (mEpisodeAdapter.getItemCount() == 1) onRefresh();
+        if (episodeCount() <= 1) onRefresh();
         else mVod.prevEpisode(true);
+    }
+
+    private int episodeCount() {
+        VodPlaybackState state = mViewModel.getPlaybackState();
+        if (!state.hasFlags()) return 0;
+        return state.getFlag().getEpisodes().size();
     }
 
     @Override
     public void onSeeking(long time) {
-        mBinding.widget.seek.setVisibility(View.GONE);
         mSession.showSeekHud(time > 0, player().getPositionTime(time));
         hideProgress();
     }
@@ -1407,10 +1418,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
 
     @Override
     public void onTouchEnd() {
-        mBinding.widget.seek.setVisibility(View.GONE);
-        mBinding.widget.speed.setVisibility(View.GONE);
-        mBinding.widget.bright.setVisibility(View.GONE);
-        mBinding.widget.volume.setVisibility(View.GONE);
         mSession.clearGestureHud();
     }
 
@@ -1494,7 +1501,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void onDownload() {
-        if (mEpisodeAdapter.getItemCount() == 0) return;
+        if (episodeCount() == 0) return;
         syncCatalog();
         ensureSheetHost();
         sheetController.showEpisodes(true);
@@ -1510,8 +1517,11 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void onSheetDownloadEpisode(int index) {
-        if (index < 0 || index >= mEpisodeAdapter.getItemCount()) return;
-        onDownloadEpisode(mEpisodeAdapter.getItems().get(index));
+        VodPlaybackState state = mViewModel.getPlaybackState();
+        if (!state.hasFlags()) return;
+        List<Episode> episodes = state.getFlag().getEpisodes();
+        if (index < 0 || index >= episodes.size()) return;
+        onDownloadEpisode(episodes.get(index));
     }
 
     private void onSheetDownloadList() {
@@ -1520,6 +1530,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
 
     private void onSheetDownloadConfirm(VodDownloadConfirm confirm) {
         if (DownloadDialog.send(this, confirm.getFileName(), confirm.getUrl(), confirm.getHeaders())) {
+            if (mSession != null) mSession.clearDownloadReady();
             sheetController.dismiss();
         }
     }
@@ -1528,10 +1539,22 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         onShare(title);
     }
 
+    private void onSheetControlMore(int id) {
+        if (id == VodControlMoreIds.TEXT) onTrack(C.TRACK_TYPE_TEXT);
+        else if (id == VodControlMoreIds.AUDIO) onTrack(C.TRACK_TYPE_AUDIO);
+        else if (id == VodControlMoreIds.VIDEO) onTrack(C.TRACK_TYPE_VIDEO);
+        else if (id == VodControlMoreIds.DANMAKU) onDanmaku();
+        else if (id == VodControlMoreIds.REPLAY) onReplay();
+        else if (id == VodControlMoreIds.REFRESH) onRefresh();
+        else if (id == VodControlMoreIds.ALL_SETTINGS) onAllSettings();
+    }
+
     private void onDownloadEpisode(Episode item) {
         int seq = ++downloadSeq;
         stopDownloadParse();
-        if (item.equals(mEpisodeAdapter.getActivated())) {
+        VodPlaybackState state = mViewModel.getPlaybackState();
+        Episode activated = state.hasEpisode() ? state.getEpisode() : null;
+        if (item.equals(activated)) {
             DownloadResolveOutcome.Ready ready = mSession.prepareDownloadFromPlayer(
                     player().getUrl(),
                     player().getHeaders(),
@@ -1542,7 +1565,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
                 return;
             }
         }
-        Flag flag = mFlagAdapter.getSelected();
+        Flag flag = state.hasFlags() ? state.getFlag() : null;
         if (flag == null) {
             Notify.show(R.string.error_play_flag);
             return;
@@ -1617,7 +1640,10 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     private void showDownload(Episode item, String url, Map<String, String> headers) {
         if (TextUtils.isEmpty(url)) return;
         String save = VodDownloadResolver.buildFileName(mBinding.name.getText().toString(), item == null ? "" : item.getName());
-        long duration = item != null && item.equals(mEpisodeAdapter.getActivated()) ? player().getDuration() : 0;
+        VodPlaybackState state = mViewModel.getPlaybackState();
+        Episode activated = state.hasEpisode() ? state.getEpisode() : null;
+        long duration = item != null && item.equals(activated) ? player().getDuration() : 0;
+        mSession.presentDownloadConfirm(save, url, duration, headers);
         ensureSheetHost();
         sheetController.showDownloadConfirm(save, url, duration, headers);
     }
@@ -1757,7 +1783,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     @Override
     protected void onStart() {
         super.onStart();
-        mClock.stop().start();
+        mProgressClock.stop().start();
         setAudioOnly(false);
         setStop(false);
     }
@@ -1765,7 +1791,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     @Override
     protected void onStop() {
         super.onStop();
-        if (PlayerSetting.isBackgroundOff()) mClock.stop();
+        if (PlayerSetting.isBackgroundOff()) mProgressClock.stop();
         if (!isAudioOnly()) setStop(true);
     }
 
@@ -1785,7 +1811,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     @Override
     protected void onDestroy() {
         stopDownloadParse();
-        mClock.release();
+        mProgressClock.release();
         saveHistory(true);
         Timer.get().reset();
         DanmakuApi.cancel();

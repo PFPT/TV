@@ -81,6 +81,16 @@ public class CustomKeyDown extends GestureDetector.SimpleOnGestureListener imple
         return scale;
     }
 
+    public void applyScale(float factor, float focusX, float focusY) {
+        if (lock || factor <= 0f || Float.isNaN(factor) || Float.isInfinite(factor)) return;
+        scale *= factor;
+        scale = Math.clamp(scale, 1.0f, 5.0f);
+        videoView.setPivotX(focusX);
+        videoView.setPivotY(focusY);
+        videoView.setScaleX(scale);
+        videoView.setScaleY(scale);
+    }
+
     private boolean isMultiple(MotionEvent e) {
         return e.getPointerCount() > 1;
     }

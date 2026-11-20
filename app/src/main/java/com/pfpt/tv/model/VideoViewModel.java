@@ -12,6 +12,10 @@ public class VideoViewModel extends SiteViewModel {
         playbackState = new VodPlaybackState();
     }
 
+    public VodPlaybackState getPlaybackState() {
+        return playbackState;
+    }
+
     public VodPlaybackController createPlaybackController(VodPlaybackHost host) {
         return new VodPlaybackController(host, playbackState);
     }

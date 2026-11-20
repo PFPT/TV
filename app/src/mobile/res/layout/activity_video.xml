@@ -28,6 +28,20 @@
             android:layout_height="match_parent"
             app:surface_type="none" />
 
+        <View
+            android:id="@+id/controlDim"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/black_20"
+            android:clickable="false"
+            android:focusable="false"
+            android:visibility="gone" />
+
+        <androidx.compose.ui.platform.ComposeView
+            android:id="@+id/gestureCompose"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
         <include
             android:id="@+id/widget"
             layout="@layout/view_widget_vod"
@@ -39,6 +53,42 @@
             layout="@layout/view_control_vod"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:visibility="gone" />
+
+        <androidx.compose.ui.platform.ComposeView
+            android:id="@+id/controlTopCompose"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top"
+            android:clickable="false"
+            android:focusable="false"
+            android:visibility="gone" />
+
+        <androidx.compose.ui.platform.ComposeView
+            android:id="@+id/controlCenterCompose"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:clickable="false"
+            android:focusable="false"
+            android:visibility="gone" />
+
+        <androidx.compose.ui.platform.ComposeView
+            android:id="@+id/controlLockCompose"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical|end"
+            android:clickable="false"
+            android:focusable="false"
+            android:visibility="gone" />
+
+        <androidx.compose.ui.platform.ComposeView
+            android:id="@+id/controlBottomCompose"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:clickable="false"
+            android:focusable="false"
             android:visibility="gone" />
 
         <include
@@ -81,6 +131,11 @@
                     android:paddingTop="16dp"
                     android:paddingBottom="8dp">
 
+                    <androidx.compose.ui.platform.ComposeView
+                        android:id="@+id/detailCompose"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content" />
+
                     <com.google.android.material.textview.MaterialTextView
                         android:id="@+id/name"
                         android:layout_width="wrap_content"
@@ -91,6 +146,7 @@
                         android:maxLines="3"
                         android:textColor="@color/white"
                         android:textSize="20sp"
+                        android:visibility="gone"
                         tools:text="慶餘年第二季" />
 
                     <com.google.android.material.textview.MaterialTextView
@@ -103,6 +159,7 @@
                         android:singleLine="true"
                         android:textColor="@color/white"
                         android:textSize="14sp"
+                        android:visibility="gone"
                         tools:text="更新到第二季" />
 
                     <com.google.android.material.textview.MaterialTextView
@@ -115,6 +172,7 @@
                         android:singleLine="true"
                         android:textColor="@color/white"
                         android:textSize="14sp"
+                        android:visibility="gone"
                         tools:text="站源：泥巴" />
 
                     <com.google.android.material.textview.MaterialTextView
@@ -186,6 +244,12 @@
 
                     </androidx.appcompat.widget.LinearLayoutCompat>
 
+                    <androidx.compose.ui.platform.ComposeView
+                        android:id="@+id/flagCompose"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp" />
+
                     <androidx.recyclerview.widget.RecyclerView
                         android:id="@+id/flag"
                         android:layout_width="match_parent"
@@ -196,6 +260,7 @@
                         android:orientation="horizontal"
                         android:paddingStart="16dp"
                         android:paddingEnd="16dp"
+                        android:visibility="gone"
                         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
                     <com.google.android.material.textview.MaterialTextView
@@ -210,6 +275,12 @@
                         android:textSize="16sp"
                         android:visibility="gone"
                         tools:visibility="visible" />
+
+                    <androidx.compose.ui.platform.ComposeView
+                        android:id="@+id/qualityCompose"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp" />
 
                     <androidx.recyclerview.widget.RecyclerView
                         android:id="@+id/quality"
@@ -266,6 +337,13 @@
 
                     </androidx.appcompat.widget.LinearLayoutCompat>
 
+                    <androidx.compose.ui.platform.ComposeView
+                        android:id="@+id/episodeCompose"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="8dp" />
+
                     <androidx.recyclerview.widget.RecyclerView
                         android:id="@+id/episode"
                         android:layout_width="match_parent"
@@ -277,6 +355,7 @@
                         android:orientation="horizontal"
                         android:paddingStart="16dp"
                         android:paddingEnd="16dp"
+                        android:visibility="gone"
                         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
                     <androidx.appcompat.widget.LinearLayoutCompat
@@ -331,4 +410,11 @@
             </androidx.core.widget.NestedScrollView>
         </com.pfpt.tv.ui.custom.ProgressLayout>
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/sheetCompose"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:elevation="24dp"
+        android:visibility="gone" />
 </RelativeLayout>

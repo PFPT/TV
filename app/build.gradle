@@ -1,5 +1,6 @@
 plugins {
     alias libs.plugins.android.application
+    alias libs.plugins.compose.compiler
 }
 
 def localProps = new Properties()
@@ -49,6 +50,7 @@ android {
     buildFeatures {
         buildConfig = true
         viewBinding = true
+        compose = true
     }
 
     signingConfigs {
@@ -93,6 +95,14 @@ android {
         sourceCompatibility JavaVersion.VERSION_21
         targetCompatibility JavaVersion.VERSION_21
     }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
+}
+
+kotlin {
+    jvmToolchain(21)
 }
 
 androidComponents {
@@ -107,13 +117,28 @@ androidComponents {
 }
 
 dependencies {
+    implementation platform(libs.compose.bom)
+    mobileImplementation libs.compose.ui
+    mobileImplementation libs.compose.ui.tooling.preview
+    mobileImplementation libs.compose.material3
+    mobileImplementation libs.compose.foundation
+    mobileImplementation libs.activity.compose
+    mobileImplementation libs.lifecycle.runtime.compose
+    mobileImplementation libs.lifecycle.viewmodel.compose
+    debugImplementation libs.compose.ui.tooling.preview
     implementation fileTree(dir: "libs", include: ["*.aar"])
     implementation project(':catvod')
     implementation project(':chaquo')
     implementation project(':quickjs')
     implementation libs.appcompat
     implementation libs.lifecycle.service
+    implementation libs.lifecycle.viewmodel.ktx
+    implementation libs.lifecycle.runtime.ktx
+    implementation libs.lifecycle.livedata.ktx
+    implementation libs.kotlinx.coroutines.android
     implementation libs.media
+    testImplementation libs.junit
+    testImplementation libs.kotlinx.coroutines.core
     implementation libs.palette
     implementation libs.recyclerview
     implementation libs.room.runtime

@@ -18,6 +18,12 @@ data class VodEpisodeItem(
     val url: String,
 )
 
+data class VodQuickItem(
+    val name: String,
+    val site: String,
+    val remark: String,
+)
+
 data class VodUiState(
     val title: String = "",
     val siteName: String = "",
@@ -39,6 +45,7 @@ data class VodUiState(
     val episodes: List<VodEpisodeItem> = emptyList(),
     val qualities: List<String> = emptyList(),
     val qualityIndex: Int = 0,
+    val quick: List<VodQuickItem> = emptyList(),
     val controlsVisible: Boolean = false,
     val locked: Boolean = false,
     val playing: Boolean = false,

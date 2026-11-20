@@ -6,6 +6,7 @@ import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import com.pfpt.tv.bean.Keep
 import com.pfpt.tv.bean.Result
+import com.pfpt.tv.bean.Vod
 import com.pfpt.tv.playback.vod.VodPlaybackState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +25,7 @@ class VodSessionViewModel : ViewModel() {
 
     private val keepToggle: KeepToggle = KeepToggle.default()
     private val playbackState = AtomicReference<VodPlaybackState?>(null)
+    private val quickVods = ArrayList<Vod>()
     private val _uiState = MutableStateFlow(VodUiState())
     val uiState: StateFlow<VodUiState> = _uiState.asStateFlow()
     val uiStateLiveData: LiveData<VodUiState> = _uiState.asLiveData()
@@ -71,8 +73,32 @@ class VodSessionViewModel : ViewModel() {
             gestureSeekForward = current.gestureSeekForward,
             gestureSeekTime = current.gestureSeekTime,
             gestureSpeedVisible = current.gestureSpeedVisible,
+            quick = current.quick,
         )
     }
+
+    fun clearQuick() {
+        quickVods.clear()
+        _uiState.update { it.copy(quick = emptyList()) }
+    }
+
+    fun addQuick(items: List<Vod>?) {
+        if (items.isNullOrEmpty()) return
+        quickVods.addAll(items)
+        _uiState.update { state ->
+            state.copy(quick = quickVods.map { vod ->
+                VodQuickItem(
+                    name = vod.name.orEmpty(),
+                    site = vod.siteName.orEmpty(),
+                    remark = vod.remarks.orEmpty(),
+                )
+            })
+        }
+    }
+
+    fun isQuickEmpty(): Boolean = quickVods.isEmpty()
+
+    fun quickAt(index: Int): Vod? = quickVods.getOrNull(index)
 
     fun updateGestureHud(
         brightVisible: Boolean,

@@ -1,7 +1,5 @@
 package com.pfpt.tv.ui.activity;
 
-import android.view.View;
-
 import com.pfpt.tv.App;
 import com.pfpt.tv.R;
 import com.pfpt.tv.bean.Episode;
@@ -27,7 +25,7 @@ class VodPlaybackBinder extends AbstractVodPlaybackBinder {
 
     @Override
     public void requestPlayer(VodPlayRequest request) {
-        activity.setPlayTitle(activity.getString(R.string.detail_title, activity.mBinding.name.getText(), request.getTitle()));
+        activity.setPlayTitle(activity.getString(R.string.detail_title, activity.getNameText(), request.getTitle()));
         activity.mViewModel.playerContent(request.getKey(), request.getFlag(), request.getId());
         activity.showProgress();
     }
@@ -58,8 +56,6 @@ class VodPlaybackBinder extends AbstractVodPlaybackBinder {
         activity.mHistory = history;
         activity.mBinding.swipeLayout.setRefreshing(false);
         activity.mBinding.progressLayout.showContent();
-        activity.hideXmlDetailShell();
-        activity.mBinding.name.setText(item.getName());
         activity.updateDetailMeta(item.getName(), null, null);
         App.removeCallbacks(activity.mR4);
         activity.setArtwork(item.getPic());
@@ -70,42 +66,32 @@ class VodPlaybackBinder extends AbstractVodPlaybackBinder {
 
     @Override
     public void renderFallbackName(String name) {
-        activity.mBinding.name.setText(name);
-        activity.mBinding.name.setVisibility(View.GONE);
         activity.updateDetailMeta(name, null, null);
     }
 
     @Override
     public void renderFlags(List<Flag> items) {
-        activity.mBinding.flag.setVisibility(View.GONE);
-        activity.mFlagAdapter.addAll(items);
         activity.syncCatalog();
     }
 
     @Override
     public void renderFlagSelection(Flag item) {
-        activity.notifyItemChanged(activity.mBinding.flag, activity.mFlagAdapter);
-        activity.scrollToPosition(activity.mBinding.flag, activity.mFlagAdapter.getPosition());
         activity.syncCatalog();
     }
 
     @Override
     public void renderEpisodeSelection(Episode item) {
-        activity.notifyItemChanged(activity.mBinding.episode, activity.mEpisodeAdapter);
-        activity.scrollToPosition(activity.mBinding.episode, activity.mEpisodeAdapter.getPosition());
         activity.syncCatalog();
     }
 
     @Override
     public void renderReverseEpisodes(List<Episode> items, boolean scroll) {
         activity.setEpisodeAdapter(items);
-        if (scroll) activity.scrollToPosition(activity.mBinding.episode, activity.mEpisodeAdapter.getPosition());
     }
 
     @Override
     public void renderQuality(Result result, boolean visible) {
         activity.mBinding.swipeLayout.setRefreshing(false);
-        activity.mQualityAdapter.addAll(result);
         activity.setQualityVisible(visible);
     }
 
@@ -123,7 +109,7 @@ class VodPlaybackBinder extends AbstractVodPlaybackBinder {
 
     @Override
     public void renderDescription(String desc) {
-        activity.setText(activity.mBinding.content, 0, desc);
+        activity.setDescription(desc);
     }
 
     @Override

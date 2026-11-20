@@ -252,3 +252,16 @@ fun ComposeView.setVodEpisodes(
         )
     }
 }
+
+fun ComposeView.setVodQuick(
+    session: VodSessionViewModel,
+    onQuickClick: VodIndexClick,
+) {
+    setContent {
+        val state by session.uiState.collectAsStateWithLifecycle()
+        VodQuickGrid(
+            items = state.quick,
+            onClick = onQuickClick::onClick,
+        )
+    }
+}

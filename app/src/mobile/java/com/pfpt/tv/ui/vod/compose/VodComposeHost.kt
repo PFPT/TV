@@ -68,6 +68,10 @@ fun ComposeView.setVodScreen(
     onTitleLongClick: Runnable,
     onSiteClick: Runnable,
     onRemarkClick: Runnable,
+    onDownloadClick: Runnable,
+    onReverseClick: Runnable,
+    onMoreClick: Runnable,
+    onCopyContent: Runnable,
 ) {
     setContent {
         val state by session.uiState.collectAsStateWithLifecycle()
@@ -78,6 +82,10 @@ fun ComposeView.setVodScreen(
             onTitleLongClick = onTitleLongClick::run,
             onSiteClick = onSiteClick::run,
             onRemarkClick = onRemarkClick::run,
+            onDownloadClick = onDownloadClick::run,
+            onReverseClick = onReverseClick::run,
+            onMoreClick = onMoreClick::run,
+            onCopyContent = onCopyContent::run,
         )
     }
 }

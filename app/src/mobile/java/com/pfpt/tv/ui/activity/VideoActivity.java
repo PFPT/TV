@@ -100,7 +100,9 @@ import com.pfpt.tv.playback.vod.session.VodDownloadResolver;
 import com.pfpt.tv.playback.vod.session.VodSessionViewModel;
 import com.pfpt.tv.ui.vod.compose.VodComposeHostKt;
 import com.pfpt.tv.ui.vod.compose.VodControlMoreIds;
+import com.pfpt.tv.ui.vod.compose.VodControlMoreVisibility;
 import com.pfpt.tv.ui.vod.compose.VodDownloadConfirm;
+import com.pfpt.tv.ui.vod.compose.VodPlayerScale;
 import com.pfpt.tv.ui.vod.compose.VodSheetController;
 import com.pfpt.tv.ui.vod.compose.VodSheetsKt;
 import com.pfpt.tv.utils.Clock;
@@ -146,6 +148,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     private String remarkRawForCompose;
     private ValueAnimator mAnimator;
     private CustomKeyDown mKeyDown;
+    private VodPlayerScale mPlayerScale;
     History mHistory;
     private boolean fullscreen;
     private boolean useParse;
@@ -391,6 +394,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         super.initView(savedInstanceState);
         ViewCompat.setOnApplyWindowInsetsListener(mBinding.getRoot(), (v, insets) -> setStatusBar(insets));
         mKeyDown = CustomKeyDown.create(this, mBinding.player);
+        mPlayerScale = new VodPlayerScale(mBinding.player);
         mFrameParams = mBinding.video.getLayoutParams();
         mBinding.progressLayout.showProgress();
         mBinding.swipeLayout.setEnabled(false);
@@ -475,7 +479,8 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         mViewModel = new ViewModelProvider(this).get(VideoViewModel.class);
         mSession = new ViewModelProvider(this).get(VodSessionViewModel.class);
         mSession.bind(mViewModel.getPlaybackState());
-        VodComposeHostKt.setVodScreen(mBinding.detailCompose, mSession, this::onKeep, this::onName, () -> onChange(), this::onComposeSiteClick, this::onComposeRemarkClick);
+        VodComposeHostKt.setVodScreen(mBinding.detailCompose, mSession, this::onKeep, this::onName, () -> onChange(), this::onComposeSiteClick, this::onComposeRemarkClick, this::onDownload, this::onReverse, this::onMore, this::onCopy);
+        hideXmlDetailShell();
         VodComposeHostKt.setVodFlags(mBinding.flagCompose, mSession, this::onComposeFlag);
         VodComposeHostKt.setVodQualities(mBinding.qualityCompose, mSession, this::onComposeQuality);
         VodComposeHostKt.setVodEpisodes(mBinding.episodeCompose, mSession, this::onComposeEpisode);
@@ -528,10 +533,20 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         setText(mBinding.actor, R.string.detail_actor, item.getActor());
         setText(mBinding.content, 0, item.getContent());
         setText(mBinding.remark, 0, remarkRaw);
-        hideDetailHeaderXml();
-        String siteText = TextUtils.isEmpty(siteRaw) ? null : mBinding.site.getText().toString();
-        String remarkText = TextUtils.isEmpty(remarkRaw) ? null : mBinding.remark.getText().toString();
+        hideXmlDetailShell();
+        String siteText = TextUtils.isEmpty(siteRaw) ? null : getString(R.string.detail_site, siteRaw);
+        if (TextUtils.isEmpty(siteRaw)) siteText = null;
+        String remarkText = TextUtils.isEmpty(remarkRaw) ? null : remarkRaw;
         updateDetailMeta(mBinding.name.getText().toString(), siteText, remarkText);
+        if (mSession != null) {
+            mSession.updateDetailBody(
+                    item.getYear(),
+                    item.getArea(),
+                    item.getTypeName(),
+                    item.getDirector(),
+                    item.getActor(),
+                    item.getContent());
+        }
         setOther(mBinding.other, item);
     }
 
@@ -539,10 +554,17 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         if (mSession != null) mSession.updateDetailMeta(title, siteName, remark);
     }
 
-    void hideDetailHeaderXml() {
+    void hideXmlDetailShell() {
         mBinding.name.setVisibility(View.GONE);
         mBinding.remark.setVisibility(View.GONE);
         mBinding.site.setVisibility(View.GONE);
+        mBinding.director.setVisibility(View.GONE);
+        mBinding.actor.setVisibility(View.GONE);
+        mBinding.content.setVisibility(View.GONE);
+        mBinding.contentLayout.setVisibility(View.GONE);
+        mBinding.download.setVisibility(View.GONE);
+        mBinding.reverse.setVisibility(View.GONE);
+        mBinding.more.setVisibility(View.GONE);
     }
 
     void setText(TextView view, int resId, String text) {
@@ -751,7 +773,20 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
 
     private void onSetting() {
         ensureSheetHost();
-        sheetController.showControlMore();
+        boolean showText = player() != null && (player().haveTrack(C.TRACK_TYPE_TEXT) || player().isVod());
+        boolean showAudio = player() != null && player().haveTrack(C.TRACK_TYPE_AUDIO);
+        boolean showVideo = player() != null && player().haveTrack(C.TRACK_TYPE_VIDEO);
+        boolean showDanmaku = player() != null && player().haveDanmaku();
+        boolean showSpeed = player() != null && player().isVod();
+        String speedLabel = player() != null ? player().getSpeedText() : "";
+        String[] scales = ResUtil.getStringArray(R.array.select_scale);
+        int scale = getScale();
+        String scaleLabel = scale >= 0 && scale < scales.length ? scales[scale] : getString(R.string.play_scale);
+        String decodeLabel = player() != null ? player().getDecodeText() : getString(R.string.play_decode);
+        boolean repeatOn = player() != null && player().isRepeatOne();
+        sheetController.showControlMore(new VodControlMoreVisibility(
+                showText, showAudio, showVideo, showDanmaku, showSpeed, speedLabel,
+                scaleLabel, decodeLabel, openingLabel(), endingLabel(), repeatOn));
     }
 
     private void onAllSettings() {
@@ -902,7 +937,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         mBinding.video.setLayoutParams(new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT));
         setRequestedOrientation(PlaybackOrientation.getEnterFullscreenOrientation(player().isPortrait()));
         setRotate(player().isPortrait());
-        mKeyDown.resetScale();
+        mPlayerScale.reset();
         App.post(mR3, 2000);
         hideControl();
     }
@@ -914,7 +949,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         setRequestedOrientation(PlaybackOrientation.getExitFullscreenOrientation(isPort()));
         mBinding.episode.postDelayed(() -> mBinding.episode.scrollToPosition(mEpisodeAdapter.getPosition()), 100);
         mBinding.video.setLayoutParams(mFrameParams);
-        mKeyDown.resetScale();
+        mPlayerScale.reset();
         App.post(mR3, 2000);
         setRotate(false);
         hideControl();
@@ -1335,7 +1370,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
 
     @Override
     public void onScale(int tag) {
-        mKeyDown.resetScale();
+        mPlayerScale.reset();
         setScale(tag);
     }
 
@@ -1470,7 +1505,8 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void onComposeScale(float factor, float focusX, float focusY) {
-        mKeyDown.applyScale(factor, focusX, focusY);
+        if (isLock()) return;
+        mPlayerScale.apply(factor, focusX, focusY);
     }
 
     private void onComposeFlingUp() {
@@ -1540,13 +1576,49 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void onSheetControlMore(int id) {
-        if (id == VodControlMoreIds.TEXT) onTrack(C.TRACK_TYPE_TEXT);
+        if (id == VodControlMoreIds.EPISODES) {
+            syncCatalog();
+            ensureSheetHost();
+            sheetController.showEpisodes(false);
+        } else if (id == VodControlMoreIds.SPEED) {
+            onCycleSpeed();
+        } else if (id == VodControlMoreIds.SCALE) {
+            onScale((getScale() + 1) % 5);
+        } else if (id == VodControlMoreIds.DECODE) {
+            onDecode();
+        } else if (id == VodControlMoreIds.REPEAT) {
+            onRepeat();
+        } else if (id == VodControlMoreIds.OPENING) {
+            onOpening();
+        } else if (id == VodControlMoreIds.ENDING) {
+            onEnding();
+        } else if (id == VodControlMoreIds.INFO) {
+            onPlaybackInfo();
+        } else if (id == VodControlMoreIds.TEXT) onTrack(C.TRACK_TYPE_TEXT);
+        else if (id == VodControlMoreIds.SUBTITLE) onSubtitleClick();
         else if (id == VodControlMoreIds.AUDIO) onTrack(C.TRACK_TYPE_AUDIO);
         else if (id == VodControlMoreIds.VIDEO) onTrack(C.TRACK_TYPE_VIDEO);
         else if (id == VodControlMoreIds.DANMAKU) onDanmaku();
         else if (id == VodControlMoreIds.REPLAY) onReplay();
-        else if (id == VodControlMoreIds.REFRESH) onRefresh();
+        else if (id == VodControlMoreIds.RESET) onRefresh();
         else if (id == VodControlMoreIds.ALL_SETTINGS) onAllSettings();
+    }
+
+    private void onCycleSpeed() {
+        if (player() == null) return;
+        player().addSpeed();
+        if (mVod != null) mVod.setSpeed(player().getSpeed());
+        pushPlaybackProgress(readPositionMs(), readDurationMs());
+        setR1Callback();
+    }
+
+    private void onPlaybackInfo() {
+        CharSequence title = mBinding.name.getText();
+        if (title == null || title.length() == 0) {
+            title = mSession != null ? mSession.getUiState().getValue().getTitle() : "";
+        }
+        ensureSheetHost();
+        sheetController.showInfo(title, player().getUrl(), player().getHeaders());
     }
 
     private void onDownloadEpisode(Episode item) {

@@ -58,7 +58,7 @@ class VodPlaybackBinder extends AbstractVodPlaybackBinder {
         activity.mHistory = history;
         activity.mBinding.swipeLayout.setRefreshing(false);
         activity.mBinding.progressLayout.showContent();
-        activity.hideDetailHeaderXml();
+        activity.hideXmlDetailShell();
         activity.mBinding.name.setText(item.getName());
         activity.updateDetailMeta(item.getName(), null, null);
         App.removeCallbacks(activity.mR4);

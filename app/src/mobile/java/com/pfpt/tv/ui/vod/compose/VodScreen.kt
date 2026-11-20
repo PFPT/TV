@@ -13,6 +13,10 @@ fun VodScreen(
     onTitleLongClick: () -> Unit,
     onSiteClick: () -> Unit = {},
     onRemarkClick: () -> Unit = {},
+    onDownloadClick: () -> Unit = {},
+    onReverseClick: () -> Unit = {},
+    onMoreClick: () -> Unit = {},
+    onCopyContent: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -23,6 +27,10 @@ fun VodScreen(
             onTitleLongClick = onTitleLongClick,
             onSiteClick = onSiteClick,
             onRemarkClick = onRemarkClick,
+            onDownloadClick = onDownloadClick,
+            onReverseClick = onReverseClick,
+            onMoreClick = onMoreClick,
+            onCopyContent = onCopyContent,
         )
     }
 }

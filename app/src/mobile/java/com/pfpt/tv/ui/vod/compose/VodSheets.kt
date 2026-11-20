@@ -104,9 +104,32 @@ object VodControlMoreIds {
     const val VIDEO = 3
     const val DANMAKU = 4
     const val REPLAY = 5
-    const val REFRESH = 6
+    const val RESET = 6
     const val ALL_SETTINGS = 7
+    const val INFO = 8
+    const val EPISODES = 9
+    const val SPEED = 10
+    const val SCALE = 11
+    const val DECODE = 12
+    const val REPEAT = 13
+    const val OPENING = 14
+    const val ENDING = 15
+    const val SUBTITLE = 16
 }
+
+data class VodControlMoreVisibility(
+    val showText: Boolean = true,
+    val showAudio: Boolean = false,
+    val showVideo: Boolean = false,
+    val showDanmaku: Boolean = false,
+    val showSpeed: Boolean = true,
+    val speedLabel: String = "",
+    val scaleLabel: String = "",
+    val decodeLabel: String = "",
+    val openingLabel: String = "",
+    val endingLabel: String = "",
+    val repeatOn: Boolean = false,
+)
 
 class VodSheetController {
     var kind by mutableStateOf(VodSheetKind.None)
@@ -114,6 +137,8 @@ class VodSheetController {
     var download by mutableStateOf<VodDownloadConfirm?>(null)
         private set
     var info by mutableStateOf<VodInfoContent?>(null)
+        private set
+    var controlMore by mutableStateOf(VodControlMoreVisibility())
         private set
 
     fun showEpisodes(download: Boolean) {
@@ -146,9 +171,10 @@ class VodSheetController {
         kind = VodSheetKind.Info
     }
 
-    fun showControlMore() {
+    fun showControlMore(visibility: VodControlMoreVisibility = VodControlMoreVisibility()) {
         download = null
         info = null
+        controlMore = visibility
         kind = VodSheetKind.ControlMore
     }
 
@@ -233,6 +259,7 @@ fun ComposeView.setVodSheetHost(
                 }
             }
             VodSheetKind.ControlMore -> ControlMoreSheet(
+                visibility = controller.controlMore,
                 onAction = { id ->
                     onControlMore.onAction(id)
                 },
@@ -552,6 +579,7 @@ fun InfoSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ControlMoreSheet(
+    visibility: VodControlMoreVisibility,
     onAction: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -565,6 +593,7 @@ fun ControlMoreSheet(
             onAction(id)
         }
     }
+    val speedLabel = visibility.speedLabel.ifEmpty { stringResource(R.string.play_speed) }
     ModalBottomSheet(
         onDismissRequest = dismiss,
         sheetState = sheetState,
@@ -583,29 +612,67 @@ fun ControlMoreSheet(
                 fontSize = 16.sp,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
             )
-            ControlMoreRow(R.string.play_track_text) { run(VodControlMoreIds.TEXT) }
-            ControlMoreRow(R.string.play_track_audio) { run(VodControlMoreIds.AUDIO) }
-            ControlMoreRow(R.string.play_track_video) { run(VodControlMoreIds.VIDEO) }
-            ControlMoreRow(R.string.danmaku) { run(VodControlMoreIds.DANMAKU) }
-            ControlMoreRow(R.string.play_replay) { run(VodControlMoreIds.REPLAY) }
-            ControlMoreRow(R.string.play_reset) { run(VodControlMoreIds.REFRESH) }
-            ControlMoreRow(R.string.play_config) { run(VodControlMoreIds.ALL_SETTINGS) }
+            ControlMoreRow(stringResource(R.string.detail_episode)) { run(VodControlMoreIds.EPISODES) }
+            if (visibility.showSpeed) {
+                ControlMoreRow(speedLabel) { run(VodControlMoreIds.SPEED) }
+            }
+            val scaleLabel = visibility.scaleLabel.ifEmpty { stringResource(R.string.play_scale) }
+            ControlMoreRow(scaleLabel) { run(VodControlMoreIds.SCALE) }
+            val decodeLabel = visibility.decodeLabel.ifEmpty { stringResource(R.string.play_decode) }
+            ControlMoreRow(decodeLabel) { run(VodControlMoreIds.DECODE) }
+            ControlMoreRow(
+                label = stringResource(R.string.play_repeat) + if (visibility.repeatOn) " ✓" else "",
+                onClick = { run(VodControlMoreIds.REPEAT) },
+            )
+            ControlMoreRow(visibility.openingLabel.ifEmpty { stringResource(R.string.play_op) }) {
+                run(VodControlMoreIds.OPENING)
+            }
+            ControlMoreRow(visibility.endingLabel.ifEmpty { stringResource(R.string.play_ed) }) {
+                run(VodControlMoreIds.ENDING)
+            }
+            if (visibility.showText) {
+                ControlMoreRow(
+                    label = stringResource(R.string.play_track_text),
+                    onClick = { run(VodControlMoreIds.TEXT) },
+                    onLongClick = { run(VodControlMoreIds.SUBTITLE) },
+                )
+            }
+            if (visibility.showAudio) {
+                ControlMoreRow(stringResource(R.string.play_track_audio)) { run(VodControlMoreIds.AUDIO) }
+            }
+            if (visibility.showVideo) {
+                ControlMoreRow(stringResource(R.string.play_track_video)) { run(VodControlMoreIds.VIDEO) }
+            }
+            if (visibility.showDanmaku) {
+                ControlMoreRow(stringResource(R.string.danmaku)) { run(VodControlMoreIds.DANMAKU) }
+            }
+            ControlMoreRow(stringResource(R.string.play_info)) { run(VodControlMoreIds.INFO) }
+            ControlMoreRow(stringResource(R.string.play_replay)) { run(VodControlMoreIds.REPLAY) }
+            ControlMoreRow(stringResource(R.string.play_reset)) { run(VodControlMoreIds.RESET) }
+            ControlMoreRow(stringResource(R.string.play_config)) { run(VodControlMoreIds.ALL_SETTINGS) }
         }
     }
 }
 
 @Composable
 private fun ControlMoreRow(
-    labelRes: Int,
+    label: String,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     Text(
-        text = stringResource(labelRes),
+        text = label,
         color = Color.White,
         fontSize = 15.sp,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                } else {
+                    Modifier.clickable(onClick = onClick)
+                },
+            )
             .padding(horizontal = 12.dp, vertical = 14.dp),
     )
 }

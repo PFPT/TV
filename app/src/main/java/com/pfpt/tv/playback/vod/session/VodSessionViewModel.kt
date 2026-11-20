@@ -45,6 +45,12 @@ class VodSessionViewModel : ViewModel() {
         )
         _uiState.value = mapped.copy(
             title = mapped.title.ifEmpty { current.title },
+            year = current.year,
+            area = current.area,
+            type = current.type,
+            director = current.director,
+            actor = current.actor,
+            content = current.content,
             controlsVisible = current.controlsVisible,
             locked = current.locked,
             playing = current.playing,
@@ -178,6 +184,26 @@ class VodSessionViewModel : ViewModel() {
                 title = title ?: it.title,
                 siteName = siteName ?: it.siteName,
                 remark = remark ?: it.remark,
+            )
+        }
+    }
+
+    fun updateDetailBody(
+        year: String?,
+        area: String?,
+        type: String?,
+        director: String?,
+        actor: String?,
+        content: String?,
+    ) {
+        _uiState.update {
+            it.copy(
+                year = year ?: it.year,
+                area = area ?: it.area,
+                type = type ?: it.type,
+                director = director ?: it.director,
+                actor = actor ?: it.actor,
+                content = content ?: it.content,
             )
         }
     }

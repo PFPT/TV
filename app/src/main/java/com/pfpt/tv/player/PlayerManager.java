@@ -23,6 +23,7 @@ import com.pfpt.tv.bean.Result;
 import com.pfpt.tv.bean.Sub;
 import com.pfpt.tv.bean.Track;
 import com.pfpt.tv.impl.ParseCallback;
+import com.pfpt.tv.playback.PlaybackLimits;
 import com.pfpt.tv.player.engine.PlayerEngine;
 import com.pfpt.tv.player.engine.PlayerEngineFactory;
 import com.pfpt.tv.player.media.PlaySpec;
@@ -32,6 +33,7 @@ import com.pfpt.tv.setting.DanmakuSetting;
 import com.pfpt.tv.setting.PlayerSetting;
 import com.pfpt.tv.utils.Notify;
 import com.pfpt.tv.utils.ResUtil;
+import com.pfpt.tv.utils.Task;
 import com.pfpt.tv.utils.Util;
 import com.google.common.net.HttpHeaders;
 
@@ -189,11 +191,11 @@ public class PlayerManager implements ParseCallback {
     }
 
     public boolean canSetOpening(long position, long duration) {
-        return position > 0 && duration > 0 && position <= Constant.getOpEdLimit(duration);
+        return PlaybackLimits.canSetOpening(position, duration);
     }
 
     public boolean canSetEnding(long position, long duration) {
-        return position > 0 && duration > 0 && duration - position <= Constant.getOpEdLimit(duration);
+        return PlaybackLimits.canSetEnding(position, duration);
     }
 
     public int getVideoWidth() {
@@ -542,9 +544,16 @@ public class PlayerManager implements ParseCallback {
         @Override
         public void onTracksChanged(@NonNull Tracks tracks) {
             if (tracks.isEmpty() || initTrack) return;
-            setTrack(Track.find(getKey()));
-            callback.onTracksChanged();
             initTrack = true;
+            String key = getKey();
+            Task.execute(() -> {
+                List<Track> saved = Track.find(key);
+                App.post(() -> {
+                    if (player == null) return;
+                    setTrack(saved);
+                    callback.onTracksChanged();
+                });
+            });
         }
 
         @Override

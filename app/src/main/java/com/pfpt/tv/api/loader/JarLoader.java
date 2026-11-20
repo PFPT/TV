@@ -94,10 +94,20 @@ public class JarLoader {
             if (!md5.isEmpty() && Util.equals(jar, md5)) {
                 load(key, Path.jar(jar));
             } else if (jar.startsWith("http")) {
-                load(key, Download.create(jar, Path.jar(jar)).get());
+                load(key, downloadJar(jar));
             } else if (jar.startsWith("file")) {
                 load(key, Path.local(jar));
             }
+        }
+    }
+
+    private File downloadJar(String jar) {
+        File local = Path.jar(jar);
+        try {
+            return Download.create(jar, local).get();
+        } catch (Throwable e) {
+            if (Path.exists(local)) return local;
+            throw e;
         }
     }
 

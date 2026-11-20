@@ -16,6 +16,7 @@ import com.pfpt.tv.api.loader.BaseLoader;
 import com.pfpt.tv.db.AppDatabase;
 import com.pfpt.tv.gson.ExtAdapter;
 import com.pfpt.tv.gson.HeaderAdapter;
+import com.pfpt.tv.utils.Task;
 import com.pfpt.tv.utils.UrlUtil;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.net.OkHttp;
@@ -331,7 +332,7 @@ public class Site implements Parcelable {
     }
 
     public void save() {
-        AppDatabase.get().getSiteDao().insertOrUpdate(this);
+        Task.execute(() -> AppDatabase.get().getSiteDao().insertOrUpdate(this));
     }
 
     @Override

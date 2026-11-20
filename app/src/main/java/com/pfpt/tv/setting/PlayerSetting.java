@@ -88,6 +88,11 @@ public class PlayerSetting {
         Prefers.put("scale", Math.clamp(scale, MIN_SCALE, MAX_SCALE));
     }
 
+    public static int nextScale(int index, int length) {
+        if (length <= 0) return 0;
+        return index >= length - 1 ? 0 : index + 1;
+    }
+
     public static int getBackground() {
         return Math.clamp(Prefers.getInt("background", 2), MIN_BACKGROUND, MAX_BACKGROUND);
     }

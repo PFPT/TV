@@ -17,6 +17,7 @@ import com.pfpt.tv.db.AppDatabase;
 import com.pfpt.tv.event.ConfigEvent;
 import com.pfpt.tv.impl.Callback;
 import com.pfpt.tv.setting.LiveSetting;
+import com.pfpt.tv.utils.Task;
 import com.pfpt.tv.utils.UrlUtil;
 import com.github.catvod.bean.Header;
 import com.github.catvod.bean.Proxy;
@@ -194,7 +195,9 @@ public class LiveConfig extends BaseConfig {
     }
 
     public void setKeep(Channel channel) {
-        if (home != null && !channel.getGroup().isHidden()) home.keep(channel).save();
+        if (home == null || channel.getGroup().isHidden()) return;
+        Live live = home.keep(channel);
+        Task.execute(live::save);
     }
 
     public void applyKeepsToGroups(List<Group> items) {

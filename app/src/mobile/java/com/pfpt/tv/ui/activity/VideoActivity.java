@@ -394,7 +394,10 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         mObserveDetail = this::onDetailObserved;
         mObservePlayer = this::onPlayerObserved;
         mObserveSearch = this::onSearchObserved;
-        mClock = Clock.create().view(mBinding.widget.clock).format("HH:mm");
+        mClock = Clock.create().format("HH:mm");
+        mBinding.widget.clock.setVisibility(View.GONE);
+        mBinding.widget.playInfo.setVisibility(View.GONE);
+        mBinding.widget.error.setVisibility(View.GONE);
         mR1 = this::hideControl;
         mR2 = this::setTraffic;
         mR3 = this::setOrient;
@@ -927,14 +930,15 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     void showError(String text) {
-        mBinding.widget.error.setVisibility(View.VISIBLE);
-        mBinding.widget.error.setText(text);
+        mBinding.widget.error.setVisibility(View.GONE);
+        if (mSession != null) mSession.setErrorMessage(text);
         hideProgress();
     }
 
     private void hideError() {
         mBinding.widget.error.setVisibility(View.GONE);
         mBinding.widget.error.setText("");
+        if (mSession != null) mSession.setErrorMessage(null);
     }
 
     private void syncDanmakuEnabled() {
@@ -981,11 +985,13 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void updatePlayInfo() {
+        mBinding.widget.playInfo.setVisibility(View.GONE);
         boolean fullscreen = isFullscreen() && !isInPictureInPictureMode();
-        boolean controlOpen = fullscreen && isControlOpen() && !isLock();
-        mBinding.widget.playInfo.setVisibility(fullscreen && !controlOpen ? View.VISIBLE : View.GONE);
-        if (fullscreen && !isRotate()) setPadding(mBinding.widget.playInfo);
-        else noPadding(mBinding.widget.playInfo);
+        if (fullscreen && !isRotate()) setPadding(mBinding.gestureCompose);
+        else noPadding(mBinding.gestureCompose);
+        if (mSession != null) {
+            syncComposeChrome(isControlOpen());
+        }
     }
 
     private void hideSheet() {
@@ -1656,7 +1662,8 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
 
     private void syncComposeChrome(boolean visible) {
         if (mSession == null) return;
-        mSession.updatePlaybackChrome(visible, isLock(), readPlaying(), readPositionMs(), readDurationMs(), readSpeed(), isFullscreen());
+        boolean fullscreen = isFullscreen() && !isInPictureInPictureMode();
+        mSession.updatePlaybackChrome(visible, isLock(), readPlaying(), readPositionMs(), readDurationMs(), readSpeed(), fullscreen);
         pushComposeControlVisibility();
     }
 
@@ -1701,9 +1708,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     private void updateMiniTime(long position, long duration) {
         if (position < 0) position = 0;
         if (duration < 0 || duration == C.TIME_UNSET) duration = 0;
-        String current = Util.timeMs(position);
-        String total = Util.timeMs(duration);
-        mBinding.widget.length.setText(current + " / " + total);
         pushPlaybackProgress(position, duration);
     }
 

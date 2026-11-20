@@ -206,6 +206,7 @@ fun ComposeView.setVodGestureLayer(
                 onTouchEnd = onTouchEnd::run,
             )
             VodGestureHud(state = state)
+            VodStatusHud(state = state)
         }
     }
 }

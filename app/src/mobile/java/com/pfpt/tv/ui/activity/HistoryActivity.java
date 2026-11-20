@@ -17,10 +17,14 @@ import com.pfpt.tv.R;
 import com.pfpt.tv.bean.History;
 import com.pfpt.tv.databinding.ActivityHistoryBinding;
 import com.pfpt.tv.event.RefreshEvent;
+import com.pfpt.tv.App;
 import com.pfpt.tv.ui.adapter.HistoryAdapter;
 import com.pfpt.tv.ui.base.BaseActivity;
 import com.pfpt.tv.ui.dialog.SyncDialog;
+import com.pfpt.tv.utils.Task;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
+import java.util.List;
 
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
@@ -60,9 +64,15 @@ public class HistoryActivity extends BaseActivity implements HistoryAdapter.OnCl
     }
 
     private void getHistory() {
-        mAdapter.setItems(History.get(), (hasChange) -> {
-            mBinding.progressLayout.showContent(true, mAdapter.getItemCount());
-            if (hasChange) mBinding.recycler.scrollToPosition(0);
+        Task.execute(() -> {
+            List<History> items = History.get();
+            App.post(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                mAdapter.setItems(items, (hasChange) -> {
+                    mBinding.progressLayout.showContent(true, mAdapter.getItemCount());
+                    if (hasChange) mBinding.recycler.scrollToPosition(0);
+                });
+            });
         });
     }
 

@@ -47,7 +47,6 @@ import com.pfpt.tv.bean.Site;
 import com.pfpt.tv.bean.Sub;
 import com.pfpt.tv.bean.Vod;
 import com.pfpt.tv.databinding.ActivityVideoBinding;
-import com.pfpt.tv.db.AppDatabase;
 import com.pfpt.tv.event.RefreshEvent;
 import com.pfpt.tv.impl.CustomTarget;
 import com.pfpt.tv.model.VideoViewModel;
@@ -74,6 +73,8 @@ import com.pfpt.tv.ui.dialog.TrackDialog;
 import com.pfpt.tv.playback.PlaybackAction;
 import com.pfpt.tv.playback.vod.VodPlaybackController;
 import com.pfpt.tv.playback.vod.VodPlaybackMedia;
+import com.pfpt.tv.playback.vod.session.VodSessionViewModel;
+import com.pfpt.tv.playback.vod.session.VodUiState;
 import com.pfpt.tv.utils.Clock;
 import com.pfpt.tv.utils.FileChooser;
 import com.pfpt.tv.utils.ImgUtil;
@@ -82,6 +83,7 @@ import com.pfpt.tv.utils.Notify;
 import com.pfpt.tv.utils.PartUtil;
 import com.pfpt.tv.utils.ResUtil;
 import com.pfpt.tv.utils.Sniffer;
+import com.pfpt.tv.utils.Task;
 import com.pfpt.tv.utils.Traffic;
 import com.pfpt.tv.utils.UrlUtil;
 import com.pfpt.tv.utils.Util;
@@ -112,6 +114,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private VodPlaybackController mVod;
     private CustomKeyDownVod mKeyDown;
     VideoViewModel mViewModel;
+    private VodSessionViewModel mSession;
     History mHistory;
     private boolean fullscreen;
     private boolean useParse;
@@ -196,7 +199,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     public String getHistoryKey() {
-        return getKey().concat(AppDatabase.SYMBOL).concat(getId()).concat(AppDatabase.SYMBOL) + VodConfig.getCid();
+        return History.key(getKey(), getId());
     }
 
     Site getSite() {
@@ -208,7 +211,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     int getScale() {
-        return mHistory != null && mHistory.getScale() != -1 ? mHistory.getScale() : PlayerSetting.getScale();
+        return History.resolveScale(mHistory);
     }
 
     void setScale(int scale) {
@@ -363,10 +366,18 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
 
     private void setViewModel() {
         mViewModel = new ViewModelProvider(this).get(VideoViewModel.class);
+        mSession = new ViewModelProvider(this).get(VodSessionViewModel.class);
+        mSession.bind(mViewModel.getPlaybackState());
+        mSession.getUiStateLiveData().observe(this, this::onSessionState);
         observeForever(mViewModel.getResult(), mObserveDetail);
         observeForever(mViewModel.getPlayer(), mObservePlayer);
         observeForever(mViewModel.getSearch(), mObserveSearch);
         mVod = mViewModel.createPlaybackController(new VodPlaybackBinder(this));
+    }
+
+    private void onSessionState(VodUiState state) {
+        if (state == null || isFinishing() || isDestroyed()) return;
+        mBinding.keep.setCompoundDrawablesWithIntrinsicBounds(state.getKept() ? R.drawable.ic_detail_keep_on : R.drawable.ic_detail_keep_off, 0, 0, 0);
     }
 
     private void onDetailObserved(Result result) {
@@ -532,11 +543,11 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void onKeep() {
-        Keep keep = Keep.find(getHistoryKey());
-        Notify.show(keep != null ? R.string.keep_del : R.string.keep_add);
-        if (keep != null) keep.delete();
-        else createKeep();
-        checkKeepImg();
+        if (mHistory == null || mSession == null) return;
+        mSession.toggleKeep(getHistoryKey(), VodConfig.getCid(), mHistory.getVodName(), mHistory.getVodPic(), getSite().getName(), (kept, removed) -> {
+            if (isFinishing() || isDestroyed()) return;
+            Notify.show(removed ? R.string.keep_del : R.string.keep_add);
+        });
     }
 
     private void onVideo() {
@@ -584,7 +595,7 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     private void onScale() {
         int index = getScale();
         String[] array = ResUtil.getStringArray(R.array.select_scale);
-        setScale(index == array.length - 1 ? 0 : ++index);
+        setScale(PlayerSetting.nextScale(index, array.length));
     }
 
     private void onSpeed() {
@@ -797,10 +808,9 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     private void saveHistory(boolean exit) {
+        if (mVod == null) return;
         boolean owner = service() != null && isOwner();
-        long position = owner ? player().getPosition() : C.TIME_UNSET;
-        long duration = owner ? player().getDuration() : C.TIME_UNSET;
-        if (mVod != null) mVod.saveHistory(exit, System.currentTimeMillis(), position, duration);
+        mVod.saveHistory(exit, owner, player().getPosition(), player().getDuration());
     }
 
     private void syncHistory() {
@@ -808,27 +818,17 @@ public class VideoActivity extends PlaybackActivity implements CustomKeyDownVod.
     }
 
     void checkKeepImg() {
-        mBinding.keep.setCompoundDrawablesWithIntrinsicBounds(Keep.find(getHistoryKey()) == null ? R.drawable.ic_detail_keep_off : R.drawable.ic_detail_keep_on, 0, 0, 0);
-    }
-
-    private void createKeep() {
-        Keep keep = new Keep();
-        keep.setKey(getHistoryKey());
-        keep.setCid(VodConfig.getCid());
-        keep.setVodPic(mHistory.getVodPic());
-        keep.setVodName(mHistory.getVodName());
-        keep.setSiteName(getSite().getName());
-        keep.setCreateTime(System.currentTimeMillis());
-        keep.save();
+        if (mSession == null) return;
+        mSession.refresh();
+        mSession.loadKept(getHistoryKey());
     }
 
     void updateKeep() {
-        Keep keep = Keep.find(getHistoryKey());
-        if (keep != null) {
-            keep.setVodName(mHistory.getVodName());
-            keep.setVodPic(mHistory.getVodPic());
-            keep.save();
-        }
+        if (mHistory == null) return;
+        String key = getHistoryKey();
+        String name = mHistory.getVodName();
+        String pic = mHistory.getVodPic();
+        Task.execute(() -> Keep.updateNamePic(key, name, pic));
     }
 
     private void updateVod(Vod item) {

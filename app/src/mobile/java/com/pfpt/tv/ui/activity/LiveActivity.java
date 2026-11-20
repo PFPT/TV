@@ -70,6 +70,7 @@ import com.pfpt.tv.utils.ImgUtil;
 import com.pfpt.tv.utils.Notify;
 import com.pfpt.tv.utils.PiP;
 import com.pfpt.tv.utils.ResUtil;
+import com.pfpt.tv.utils.Task;
 import com.pfpt.tv.utils.Traffic;
 import com.pfpt.tv.utils.Util;
 
@@ -597,10 +598,16 @@ public class LiveActivity extends PlaybackActivity implements CustomKeyDown.List
     @Override
     public boolean onLongClick(Channel item) {
         if (mGroup.isHidden()) return false;
-        boolean exist = Keep.exist(item.getName());
-        Notify.show(exist ? R.string.keep_del : R.string.keep_add);
-        if (exist) delKeep(item);
-        else addKeep(item);
+        String name = item.getName();
+        Task.execute(() -> {
+            boolean exist = Keep.exist(name);
+            App.post(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                Notify.show(exist ? R.string.keep_del : R.string.keep_add);
+                if (exist) delKeep(item);
+                else addKeep(item);
+            });
+        });
         return true;
     }
 

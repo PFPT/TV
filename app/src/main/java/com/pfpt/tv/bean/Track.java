@@ -7,6 +7,7 @@ import androidx.room.Index;
 import androidx.room.PrimaryKey;
 
 import com.pfpt.tv.db.AppDatabase;
+import com.pfpt.tv.utils.Task;
 
 import java.util.Collections;
 import java.util.List;
@@ -34,7 +35,7 @@ public class Track {
 
     public static void delete(String key) {
         if (TextUtils.isEmpty(key)) return;
-        AppDatabase.get().getTrackDao().delete(key);
+        Task.execute(() -> AppDatabase.get().getTrackDao().delete(key));
     }
 
     public int getId() {
@@ -97,7 +98,7 @@ public class Track {
 
     public Track save() {
         if (TextUtils.isEmpty(getKey())) return this;
-        AppDatabase.get().getTrackDao().insert(this);
+        Task.execute(() -> AppDatabase.get().getTrackDao().insert(this));
         return this;
     }
 }

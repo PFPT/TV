@@ -16,7 +16,7 @@ import com.pfpt.tv.playback.PlaybackReset;
 import com.pfpt.tv.playback.vod.VodPlayRequest;
 import com.pfpt.tv.playback.vod.VodPlaybackHost;
 import com.pfpt.tv.playback.vod.VodPlaybackMedia;
-import com.pfpt.tv.utils.Notify;
+import com.pfpt.tv.playback.vod.VodPlaybackNotify;
 import com.pfpt.tv.utils.Util;
 
 import java.util.List;
@@ -91,6 +91,11 @@ class VodPlaybackBinder implements VodPlaybackHost {
     }
 
     @Override
+    public long getPlayerDuration() {
+        return activity.player().getDuration();
+    }
+
+    @Override
     public void usePushId(String id) {
         activity.getIntent().putExtra("key", SiteApi.PUSH).putExtra("id", id);
     }
@@ -162,7 +167,9 @@ class VodPlaybackBinder implements VodPlaybackHost {
         activity.mHistory = history;
         activity.mBinding.swipeLayout.setRefreshing(false);
         activity.mBinding.progressLayout.showContent();
+        activity.hideDetailHeaderXml();
         activity.mBinding.name.setText(item.getName());
+        activity.updateDetailMeta(item.getName(), null, null);
         App.removeCallbacks(activity.mR4);
         activity.setArtwork(item.getPic());
         activity.checkKeepImg();
@@ -178,12 +185,15 @@ class VodPlaybackBinder implements VodPlaybackHost {
     @Override
     public void renderFallbackName(String name) {
         activity.mBinding.name.setText(name);
+        activity.mBinding.name.setVisibility(View.GONE);
+        activity.updateDetailMeta(name, null, null);
     }
 
     @Override
     public void renderFlags(List<Flag> items) {
-        activity.mBinding.flag.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
+        activity.mBinding.flag.setVisibility(View.GONE);
         activity.mFlagAdapter.addAll(items);
+        activity.syncCatalog();
     }
 
     @Override
@@ -195,12 +205,14 @@ class VodPlaybackBinder implements VodPlaybackHost {
     public void renderFlagSelection(Flag item) {
         activity.notifyItemChanged(activity.mBinding.flag, activity.mFlagAdapter);
         activity.scrollToPosition(activity.mBinding.flag, activity.mFlagAdapter.getPosition());
+        activity.syncCatalog();
     }
 
     @Override
     public void renderEpisodeSelection(Episode item) {
         activity.notifyItemChanged(activity.mBinding.episode, activity.mEpisodeAdapter);
         activity.scrollToPosition(activity.mBinding.episode, activity.mEpisodeAdapter.getPosition());
+        activity.syncCatalog();
     }
 
     @Override
@@ -273,32 +285,32 @@ class VodPlaybackBinder implements VodPlaybackHost {
 
     @Override
     public void showDetailMessage(String msg) {
-        Notify.show(msg);
+        VodPlaybackNotify.detailMessage(msg);
     }
 
     @Override
     public void showSwitchLine(Flag flag) {
-        Notify.show(activity.getString(R.string.play_switch_flag, flag.getFlag()));
+        VodPlaybackNotify.switchFlag(activity, flag);
     }
 
     @Override
     public void showSwitchSource(Vod item) {
-        Notify.show(activity.getString(R.string.play_switch_site, item.getSiteName()));
+        VodPlaybackNotify.switchSource(activity, item);
     }
 
     @Override
     public void showEpisodeReady(Episode item) {
-        Notify.show(activity.getString(R.string.play_ready, item.getName()));
+        VodPlaybackNotify.episodeReady(activity, item);
     }
 
     @Override
     public void showNoNext(boolean reversed) {
-        Notify.show(reversed ? R.string.error_play_prev : R.string.error_play_next);
+        VodPlaybackNotify.noNext(reversed);
     }
 
     @Override
     public void showNoPrev(boolean reversed) {
-        Notify.show(reversed ? R.string.error_play_next : R.string.error_play_prev);
+        VodPlaybackNotify.noPrev(reversed);
     }
 
     @Override

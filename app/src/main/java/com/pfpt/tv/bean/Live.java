@@ -15,6 +15,7 @@ import com.pfpt.tv.api.loader.BaseLoader;
 import com.pfpt.tv.db.AppDatabase;
 import com.pfpt.tv.gson.ExtAdapter;
 import com.pfpt.tv.gson.HeaderAdapter;
+import com.pfpt.tv.utils.Task;
 import com.pfpt.tv.utils.UrlUtil;
 import com.github.catvod.crawler.Spider;
 import com.github.catvod.utils.Trans;
@@ -373,7 +374,7 @@ public class Live {
     }
 
     public void save() {
-        AppDatabase.get().getLiveDao().insertOrUpdate(this);
+        Task.execute(() -> AppDatabase.get().getLiveDao().insertOrUpdate(this));
     }
 
     @Override

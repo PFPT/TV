@@ -16,7 +16,7 @@ import com.pfpt.tv.playback.PlaybackReset;
 import com.pfpt.tv.playback.vod.VodPlayRequest;
 import com.pfpt.tv.playback.vod.VodPlaybackHost;
 import com.pfpt.tv.playback.vod.VodPlaybackMedia;
-import com.pfpt.tv.utils.Notify;
+import com.pfpt.tv.playback.vod.VodPlaybackNotify;
 import com.pfpt.tv.utils.Util;
 
 import java.util.List;
@@ -88,6 +88,11 @@ class VodPlaybackBinder implements VodPlaybackHost {
     @Override
     public long getPlayerPosition() {
         return activity.player().getPosition();
+    }
+
+    @Override
+    public long getPlayerDuration() {
+        return activity.player().getDuration();
     }
 
     @Override
@@ -271,32 +276,32 @@ class VodPlaybackBinder implements VodPlaybackHost {
 
     @Override
     public void showDetailMessage(String msg) {
-        Notify.show(msg);
+        VodPlaybackNotify.detailMessage(msg);
     }
 
     @Override
     public void showSwitchLine(Flag flag) {
-        Notify.show(activity.getString(R.string.play_switch_flag, flag.getFlag()));
+        VodPlaybackNotify.switchFlag(activity, flag);
     }
 
     @Override
     public void showSwitchSource(Vod item) {
-        Notify.show(activity.getString(R.string.play_switch_site, item.getSiteName()));
+        VodPlaybackNotify.switchSource(activity, item);
     }
 
     @Override
     public void showEpisodeReady(Episode item) {
-        Notify.show(activity.getString(R.string.play_ready, item.getName()));
+        VodPlaybackNotify.episodeReady(activity, item);
     }
 
     @Override
     public void showNoNext(boolean reversed) {
-        Notify.show(reversed ? R.string.error_play_prev : R.string.error_play_next);
+        VodPlaybackNotify.noNext(reversed);
     }
 
     @Override
     public void showNoPrev(boolean reversed) {
-        Notify.show(reversed ? R.string.error_play_next : R.string.error_play_prev);
+        VodPlaybackNotify.noPrev(reversed);
     }
 
     @Override

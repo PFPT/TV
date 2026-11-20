@@ -7,8 +7,10 @@ import com.pfpt.tv.bean.Result;
 import com.pfpt.tv.bean.Vod;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public class VodPlaybackState {
@@ -16,6 +18,7 @@ public class VodPlaybackState {
     private final Set<String> failedIds;
     private final List<Vod> sources;
     private final List<Flag> flags;
+    private final Map<String, long[]> episodeProgress;
     private VodPlayRequest pendingRequest;
     private VodPlayRequest playingRequest;
     private History history;
@@ -23,6 +26,7 @@ public class VodPlaybackState {
     private boolean selectFirstSource;
     private boolean autoFallback;
     private boolean useParse;
+    private boolean playerProgressTrusted;
     private String searchKeyword;
     private int qualityPosition;
 
@@ -30,6 +34,7 @@ public class VodPlaybackState {
         this.failedIds = new HashSet<>();
         this.sources = new ArrayList<>();
         this.flags = new ArrayList<>();
+        this.episodeProgress = new HashMap<>();
         this.quality = Result.empty();
         this.searchKeyword = "";
     }
@@ -38,12 +43,14 @@ public class VodPlaybackState {
         failedIds.clear();
         sources.clear();
         flags.clear();
+        episodeProgress.clear();
         quality = Result.empty();
         history = null;
         clearPlayRequest();
         selectFirstSource = false;
         autoFallback = false;
         useParse = false;
+        playerProgressTrusted = false;
         searchKeyword = "";
         qualityPosition = 0;
     }
@@ -121,6 +128,10 @@ public class VodPlaybackState {
         this.qualityPosition = qualityPosition;
     }
 
+    public Map<String, long[]> getEpisodeProgress() {
+        return episodeProgress;
+    }
+
     public History getHistory() {
         return history;
     }
@@ -173,6 +184,14 @@ public class VodPlaybackState {
 
     public void setUseParse(boolean useParse) {
         this.useParse = useParse;
+    }
+
+    public boolean isPlayerProgressTrusted() {
+        return playerProgressTrusted;
+    }
+
+    public void setPlayerProgressTrusted(boolean playerProgressTrusted) {
+        this.playerProgressTrusted = playerProgressTrusted;
     }
 
     public String getSearchKeyword() {

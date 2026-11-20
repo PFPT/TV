@@ -1,6 +1,8 @@
 package com.pfpt.tv.ui.dialog;
 
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -12,11 +14,13 @@ import androidx.viewbinding.ViewBinding;
 
 import com.pfpt.tv.R;
 import com.pfpt.tv.databinding.DialogDownloadBinding;
+import com.pfpt.tv.player.util.PlayerHelper;
 import com.pfpt.tv.utils.Notify;
 import com.pfpt.tv.utils.Util;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.Locale;
+import java.util.Map;
 
 public class DownloadDialog extends BaseAlertDialog {
 
@@ -27,14 +31,24 @@ public class DownloadDialog extends BaseAlertDialog {
     private String name;
     private String url;
     private long durationMs;
+    private Map<String, String> headers;
 
-    public static void show(FragmentActivity activity, String name, String url, long durationMs) {
+    public static void show(FragmentActivity activity, String name, String url, long durationMs, Map<String, String> headers) {
         if (TextUtils.isEmpty(url)) return;
         DownloadDialog dialog = new DownloadDialog();
         dialog.name = name == null ? "" : name;
         dialog.url = url;
         dialog.durationMs = durationMs;
+        dialog.headers = headers;
         dialog.show(activity.getSupportFragmentManager(), null);
+    }
+
+    public static String fileName(String title, String episode) {
+        String name = title == null ? "" : title;
+        String part = episode == null ? "" : episode;
+        if (TextUtils.isEmpty(name)) return part;
+        if (TextUtils.isEmpty(part)) return name;
+        return name + "-" + part;
     }
 
     public static void openList(Activity activity) {
@@ -43,7 +57,11 @@ public class DownloadDialog extends BaseAlertDialog {
             Notify.show(R.string.download_missing);
             return;
         }
-        activity.startActivity(intent);
+        try {
+            activity.startActivity(intent);
+        } catch (ActivityNotFoundException e) {
+            Notify.show(R.string.download_missing);
+        }
     }
 
     @Override
@@ -78,8 +96,13 @@ public class DownloadDialog extends BaseAlertDialog {
     }
 
     private boolean isPlayerInstalled() {
+        return isPlayerInstalled(requireContext());
+    }
+
+    public static boolean isPlayerInstalled(Context context) {
+        if (context == null) return false;
         try {
-            requireContext().getPackageManager().getPackageInfo(PLAYER, 0);
+            context.getPackageManager().getPackageInfo(PLAYER, 0);
             return true;
         } catch (PackageManager.NameNotFoundException e) {
             return false;
@@ -87,17 +110,30 @@ public class DownloadDialog extends BaseAlertDialog {
     }
 
     private void send() {
-        if (TextUtils.isEmpty(url) || !isPlayerInstalled()) return;
+        if (send(requireActivity(), name, url, headers)) dismiss();
+    }
+
+    public static boolean send(Activity activity, String name, String url, Map<String, String> headers) {
+        if (activity == null || TextUtils.isEmpty(url) || !isPlayerInstalled(activity)) {
+            Notify.show(R.string.download_missing);
+            return false;
+        }
         Intent intent = new Intent(Intent.ACTION_SEND);
         intent.setPackage(PLAYER);
         intent.setType("text/plain");
         intent.putExtra(Intent.EXTRA_TEXT, url);
-        intent.putExtra(Intent.EXTRA_SUBJECT, name);
-        startActivity(intent);
-        dismiss();
+        intent.putExtra(Intent.EXTRA_SUBJECT, name == null ? "" : name);
+        intent.putExtra("extra_headers", PlayerHelper.toBundle(headers));
+        try {
+            activity.startActivity(intent);
+            return true;
+        } catch (ActivityNotFoundException e) {
+            Notify.show(R.string.download_missing);
+            return false;
+        }
     }
 
-    static String extension(String url) {
+    public static String extension(String url) {
         if (url != null && url.toLowerCase(Locale.US).contains("do=m3u8")) return "m3u8";
         String media = unwrapLocalProxy(url);
         String path = Uri.parse(media).getPath();

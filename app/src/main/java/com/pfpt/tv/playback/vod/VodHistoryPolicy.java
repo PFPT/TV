@@ -13,7 +13,15 @@ import com.pfpt.tv.event.RefreshEvent;
 import com.pfpt.tv.setting.Setting;
 import com.pfpt.tv.utils.Task;
 
+import java.util.Map;
+
 public class VodHistoryPolicy {
+
+    private final Map<String, long[]> episodeProgress;
+
+    public VodHistoryPolicy(Map<String, long[]> episodeProgress) {
+        this.episodeProgress = episodeProgress;
+    }
 
     public History findOrCreate(String key, String mark, Vod item) {
         History history = History.find(key);
@@ -48,9 +56,26 @@ public class VodHistoryPolicy {
         if (history != null && !Setting.isIncognito()) Task.execute(history::save);
     }
 
+    public void capture(History history, long position, long duration) {
+        if (history == null || position <= 0) return;
+        history.setPosition(position);
+        if (duration > 0) history.setDuration(duration);
+        remember(history);
+    }
+
+    public void clearPosition(History history) {
+        if (history == null) return;
+        episodeProgress.remove(key(history));
+        history.setPosition(C.TIME_UNSET);
+        history.setDuration(C.TIME_UNSET);
+    }
+
     public void updateEpisode(History history, Flag flag, Episode episode) {
         if (history == null || flag == null || episode == null) return;
-        history.setPosition(episode.matchesName(history.getEpisode()) ? history.getPosition() : C.TIME_UNSET);
+        if (!sameEpisode(history, flag, episode)) {
+            remember(history);
+            restore(history, flag, episode);
+        }
         history.setVodFlag(flag.getFlag());
         history.setVodRemarks(episode.getName());
         history.setEpisodeUrl(episode.getUrl());
@@ -61,7 +86,47 @@ public class VodHistoryPolicy {
         history.setCreateTime(time);
         history.setPosition(position);
         history.setDuration(duration);
+        remember(history);
         if (history.canSave() && history.canSync()) sync(history);
+    }
+
+    private void remember(History history) {
+        if (history.getPosition() <= 0 || history.getDuration() <= 0) return;
+        episodeProgress.put(key(history), new long[]{history.getPosition(), history.getDuration()});
+    }
+
+    private void restore(History history, Flag flag, Episode episode) {
+        long[] saved = episodeProgress.get(key(history.getKey(), flag.getFlag(), episode));
+        if (saved == null) {
+            history.setPosition(C.TIME_UNSET);
+            history.setDuration(C.TIME_UNSET);
+            return;
+        }
+        history.setPosition(saved[0]);
+        history.setDuration(saved[1]);
+    }
+
+    private boolean sameEpisode(History history, Flag flag, Episode episode) {
+        if (!TextUtils.equals(history.getVodFlag(), flag.getFlag())) return false;
+        return matchesCurrent(history, episode);
+    }
+
+    private boolean matchesCurrent(History history, Episode episode) {
+        if (!episode.matchesName(history.getEpisode())) return false;
+        String currentUrl = history.getEpisodeUrl();
+        String nextUrl = episode.getUrl();
+        if (currentUrl.isEmpty()) return true;
+        if (nextUrl.isEmpty()) return false;
+        return currentUrl.equals(nextUrl);
+    }
+
+    private String key(History history) {
+        return key(history.getKey(), history.getVodFlag(), history.getEpisode());
+    }
+
+    private String key(String historyKey, String flag, Episode episode) {
+        String id = episode.getUrl().isEmpty() ? episode.getName() : episode.getUrl();
+        return historyKey + '\u0000' + (flag == null ? "" : flag) + '\u0000' + id;
     }
 
     public long startPositionMs(History history) {

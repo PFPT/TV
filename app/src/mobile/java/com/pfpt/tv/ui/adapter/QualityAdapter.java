@@ -30,6 +30,15 @@ public class QualityAdapter extends RecyclerView.Adapter<QualityAdapter.ViewHold
         notifyDataSetChanged();
     }
 
+    public Result getResult() {
+        return result;
+    }
+
+    public void select(int index) {
+        if (index < 0 || index >= getItemCount()) return;
+        onItemClick(index);
+    }
+
     public int getPosition() {
         return position;
     }

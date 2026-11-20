@@ -4,105 +4,26 @@ import android.view.View;
 
 import com.pfpt.tv.App;
 import com.pfpt.tv.R;
-import com.pfpt.tv.api.SiteApi;
 import com.pfpt.tv.bean.Episode;
 import com.pfpt.tv.bean.Flag;
 import com.pfpt.tv.bean.History;
 import com.pfpt.tv.bean.Result;
-import com.pfpt.tv.bean.Site;
 import com.pfpt.tv.bean.Vod;
 import com.pfpt.tv.playback.PlaybackAction;
 import com.pfpt.tv.playback.PlaybackReset;
+import com.pfpt.tv.playback.vod.AbstractVodPlaybackBinder;
 import com.pfpt.tv.playback.vod.VodPlayRequest;
-import com.pfpt.tv.playback.vod.VodPlaybackHost;
-import com.pfpt.tv.playback.vod.VodPlaybackMedia;
-import com.pfpt.tv.playback.vod.VodPlaybackNotify;
 import com.pfpt.tv.utils.Util;
 
 import java.util.List;
 
-class VodPlaybackBinder implements VodPlaybackHost {
+class VodPlaybackBinder extends AbstractVodPlaybackBinder {
 
     private final VideoActivity activity;
 
     VodPlaybackBinder(VideoActivity activity) {
+        super(activity);
         this.activity = activity;
-    }
-
-    @Override
-    public String getVodKey() {
-        return activity.getKey();
-    }
-
-    @Override
-    public String getVodId() {
-        return activity.getId();
-    }
-
-    @Override
-    public String getVodName() {
-        String name = activity.mBinding.name.getText().toString();
-        return name.isEmpty() ? activity.getName() : name;
-    }
-
-    @Override
-    public String getVodPic() {
-        return activity.getPic();
-    }
-
-    @Override
-    public String getVodMark() {
-        return activity.getMark();
-    }
-
-    @Override
-    public String getHistoryKey() {
-        return activity.getHistoryKey();
-    }
-
-    @Override
-    public boolean isSiteChangeable() {
-        return activity.getSite().isChangeable();
-    }
-
-    @Override
-    public boolean isFromCollect() {
-        return activity.getIntent().getBooleanExtra("collect", false);
-    }
-
-    @Override
-    public boolean isHostFinishing() {
-        return activity.isFinishing() || activity.isDestroyed();
-    }
-
-    @Override
-    public boolean isPlayerEmpty() {
-        return activity.player().isEmpty();
-    }
-
-    @Override
-    public boolean isFullscreenForPlayback() {
-        return activity.isFullscreen();
-    }
-
-    @Override
-    public long getPlayerPosition() {
-        return activity.player().getPosition();
-    }
-
-    @Override
-    public long getPlayerDuration() {
-        return activity.player().getDuration();
-    }
-
-    @Override
-    public void usePushId(String id) {
-        activity.getIntent().putExtra("key", SiteApi.PUSH).putExtra("id", id);
-    }
-
-    @Override
-    public void requestDetail(String key, String id) {
-        activity.mViewModel.detailContent(key, id);
     }
 
     @Override
@@ -111,12 +32,6 @@ class VodPlaybackBinder implements VodPlaybackHost {
         activity.mViewModel.playerContent(request.getKey(), request.getFlag(), request.getId());
         activity.mBinding.widget.title.setSelected(true);
         activity.showProgress();
-    }
-
-    @Override
-    public void requestSearch(List<Site> sites, String keyword) {
-        activity.mQuickAdapter.clear();
-        activity.mViewModel.searchContent(sites, keyword, true);
     }
 
     @Override
@@ -132,31 +47,9 @@ class VodPlaybackBinder implements VodPlaybackHost {
     }
 
     @Override
-    public void stopPlaybackForRefresh() {
-        activity.player().stop();
-        activity.player().clear();
-        activity.mClock.setCallback(null);
-    }
-
-    @Override
     public void resetPlaybackForError(String msg) {
         PlaybackReset.afterError(activity.player(), () -> activity.mClock.setCallback(null));
         activity.showError(msg);
-    }
-
-    @Override
-    public void replay(long position) {
-        activity.player().replay(position);
-    }
-
-    @Override
-    public void startPlayback(Result result, boolean useParse, long startPositionMs, History history, Episode episode) {
-        activity.startPlayer(activity.getHistoryKey(), result, useParse, activity.getSite().getTimeout(), startPositionMs, VodPlaybackMedia.metadata(history, episode));
-    }
-
-    @Override
-    public void loadDanmaku(Result result, History history, Episode episode) {
-        VodPlaybackMedia.searchDanmaku(result, history, episode, activity.player()::setDanmaku, activity.player()::addDanmaku);
     }
 
     @Override
@@ -173,11 +66,6 @@ class VodPlaybackBinder implements VodPlaybackHost {
     }
 
     @Override
-    public void renderEmptyDetail() {
-        activity.showEmpty();
-    }
-
-    @Override
     public void renderFallbackName(String name) {
         activity.mBinding.name.setText(name);
     }
@@ -186,11 +74,6 @@ class VodPlaybackBinder implements VodPlaybackHost {
     public void renderFlags(List<Flag> items) {
         activity.mBinding.flag.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
         activity.mFlagAdapter.addAll(items);
-    }
-
-    @Override
-    public void renderEpisodes(List<Episode> items) {
-        activity.setEpisodeAdapter(items);
     }
 
     @Override
@@ -218,17 +101,6 @@ class VodPlaybackBinder implements VodPlaybackHost {
     }
 
     @Override
-    public void renderQualityVisible(boolean visible) {
-        activity.setQualityVisible(visible);
-    }
-
-    @Override
-    public void renderSources(List<Vod> items) {
-        activity.mQuickAdapter.addAll(items);
-        activity.mBinding.quick.setVisibility(activity.mQuickAdapter.isEmpty() ? View.GONE : View.VISIBLE);
-    }
-
-    @Override
     public void renderHistory(History history) {
         activity.mHistory = history;
         activity.mBinding.control.action.opening.setText(history.getOpening() <= 0 ? activity.getString(R.string.play_op) : Util.timeMs(history.getOpening()));
@@ -245,67 +117,12 @@ class VodPlaybackBinder implements VodPlaybackHost {
     }
 
     @Override
-    public void renderArtwork(String url) {
-        activity.setArtwork(url);
-    }
-
-    @Override
     public void renderDescription(String desc) {
         activity.mBinding.content.setTag(desc);
     }
 
     @Override
-    public void onDetailFallbackScheduled() {
-        App.post(activity.mR4, 10000);
-    }
-
-    @Override
-    public void onDetailFallbackCancelled() {
-        App.removeCallbacks(activity.mR4);
-    }
-
-    @Override
     public void onSearchStarted(String keyword) {
         activity.mBinding.part.setTag(keyword);
-    }
-
-    @Override
-    public void onSearchResult() {
-        App.removeCallbacks(activity.mR4);
-    }
-
-    @Override
-    public void showDetailMessage(String msg) {
-        VodPlaybackNotify.detailMessage(msg);
-    }
-
-    @Override
-    public void showSwitchLine(Flag flag) {
-        VodPlaybackNotify.switchFlag(activity, flag);
-    }
-
-    @Override
-    public void showSwitchSource(Vod item) {
-        VodPlaybackNotify.switchSource(activity, item);
-    }
-
-    @Override
-    public void showEpisodeReady(Episode item) {
-        VodPlaybackNotify.episodeReady(activity, item);
-    }
-
-    @Override
-    public void showNoNext(boolean reversed) {
-        VodPlaybackNotify.noNext(reversed);
-    }
-
-    @Override
-    public void showNoPrev(boolean reversed) {
-        VodPlaybackNotify.noPrev(reversed);
-    }
-
-    @Override
-    public void finishVod() {
-        activity.finish();
     }
 }

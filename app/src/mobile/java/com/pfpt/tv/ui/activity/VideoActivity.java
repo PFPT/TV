@@ -90,8 +90,10 @@ import com.pfpt.tv.ui.dialog.SubtitleDialog;
 import com.pfpt.tv.ui.dialog.TrackDialog;
 import com.pfpt.tv.playback.PlaybackAction;
 import com.pfpt.tv.playback.PlaybackOrientation;
+import com.pfpt.tv.playback.vod.VodPlaybackActivityAccess;
 import com.pfpt.tv.playback.vod.VodPlaybackController;
 import com.pfpt.tv.playback.vod.VodPlaybackMedia;
+import com.pfpt.tv.player.PlayerManager;
 import com.pfpt.tv.playback.vod.session.DownloadResolveOutcome;
 import com.pfpt.tv.playback.vod.session.VodDownloadResolver;
 import com.pfpt.tv.playback.vod.session.VodSessionViewModel;
@@ -122,7 +124,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-public class VideoActivity extends PlaybackActivity implements Clock.Callback, CustomKeyDown.Listener, TrackDialog.Listener, ControlDialog.Listener, ParseDialog.Listener, FlagAdapter.OnClickListener, EpisodeAdapter.OnClickListener, QualityAdapter.OnClickListener, QuickAdapter.OnClickListener, CastDialog.Listener {
+public class VideoActivity extends PlaybackActivity implements VodPlaybackActivityAccess, Clock.Callback, CustomKeyDown.Listener, TrackDialog.Listener, ControlDialog.Listener, ParseDialog.Listener, FlagAdapter.OnClickListener, EpisodeAdapter.OnClickListener, QualityAdapter.OnClickListener, QuickAdapter.OnClickListener, CastDialog.Listener {
 
     ActivityVideoBinding mBinding;
     private ViewGroup.LayoutParams mFrameParams;
@@ -211,32 +213,104 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         activity.startActivity(intent);
     }
 
-    String getName() {
+    @Override
+    public String getName() {
         return Objects.toString(getIntent().getStringExtra("name"), "");
     }
 
-    String getPic() {
+    @Override
+    public String getPic() {
         return Objects.toString(getIntent().getStringExtra("pic"), "");
     }
 
-    String getMark() {
+    @Override
+    public String getMark() {
         return Objects.toString(getIntent().getStringExtra("mark"), "");
     }
 
-    String getKey() {
+    @Override
+    public String getKey() {
         return Objects.toString(getIntent().getStringExtra("key"), "");
     }
 
-    String getId() {
+    @Override
+    public String getId() {
         return Objects.toString(getIntent().getStringExtra("id"), "");
     }
 
+    @Override
     public String getHistoryKey() {
         return History.key(getKey(), getId());
     }
 
-    Site getSite() {
+    @Override
+    public Site getSite() {
         return VodConfig.get().getSite(getKey());
+    }
+
+    @Override
+    public Context getHostContext() {
+        return this;
+    }
+
+    @Override
+    public String getNameText() {
+        return mBinding.name.getText().toString();
+    }
+
+    @Override
+    public PlayerManager player() {
+        return super.player();
+    }
+
+    @Override
+    public void startPlayer(String key, Result result, boolean useParse, long timeout, long startPositionMs, MediaMetadata metadata) {
+        super.startPlayer(key, result, useParse, timeout, startPositionMs, metadata);
+    }
+
+    @Override
+    public void detailContent(String key, String id) {
+        mViewModel.detailContent(key, id);
+    }
+
+    @Override
+    public void searchContent(List<Site> sites, String keyword, boolean quick) {
+        mViewModel.searchContent(sites, keyword, quick);
+    }
+
+    @Override
+    public void clearQuickAdapter() {
+        mQuickAdapter.clear();
+    }
+
+    @Override
+    public void addQuickItems(List<Vod> items) {
+        mQuickAdapter.addAll(items);
+    }
+
+    @Override
+    public boolean isQuickAdapterEmpty() {
+        return mQuickAdapter.isEmpty();
+    }
+
+    @Override
+    public void setQuickVisible(int visibility) {
+        mBinding.quick.setVisibility(visibility);
+    }
+
+    @Override
+    public void clearClockCallback() {
+        mClock.setCallback(null);
+    }
+
+    @Override
+    public void postFallbackRunnable(long delayMs) {
+        App.post(mR4, delayMs);
+    }
+
+    @Override
+    public void removeFallbackRunnable() {
+        App.removeCallbacks(mR4);
     }
 
     private Episode getEpisode() {
@@ -434,7 +508,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (isPort() && ResUtil.isLand(this)) enterFullscreen();
     }
 
-    void showEmpty() {
+    @Override
+    public void showEmpty() {
         showError(getString(R.string.error_detail));
         mBinding.swipeLayout.setEnabled(true);
         mBinding.progressLayout.showEmpty();
@@ -565,7 +640,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mVod.selectSource(item);
     }
 
-    void setEpisodeAdapter(List<Episode> items) {
+    @Override
+    public void setEpisodeAdapter(List<Episode> items) {
         mBinding.reverse.setVisibility(items.size() < 2 ? View.GONE : View.VISIBLE);
         mBinding.episode.setVisibility(View.GONE);
         mBinding.more.setVisibility(items.size() < 10 ? View.GONE : View.VISIBLE);
@@ -573,7 +649,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         syncCatalog();
     }
 
-    void setQualityVisible(boolean visible) {
+    @Override
+    public void setQualityVisible(boolean visible) {
         mBinding.qualityText.setVisibility(visible ? View.VISIBLE : View.GONE);
         mBinding.quality.setVisibility(View.GONE);
         syncCatalog();
@@ -938,7 +1015,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         else if (isControlOpen()) setR1Callback();
     }
 
-    void setArtwork(String url) {
+    @Override
+    public void setArtwork(String url) {
         mHistory.setVodPic(url);
         setArtwork();
     }
@@ -1201,7 +1279,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         controller().play();
     }
 
-    boolean isFullscreen() {
+    @Override
+    public boolean isFullscreen() {
         return fullscreen;
     }
 

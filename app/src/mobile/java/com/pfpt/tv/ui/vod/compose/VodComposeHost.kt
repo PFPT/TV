@@ -7,7 +7,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pfpt.tv.playback.vod.session.VodSessionViewModel
@@ -186,21 +189,24 @@ fun ComposeView.setVodGestureLayer(
 ) {
     setContent {
         val state by session.uiState.collectAsStateWithLifecycle()
-        VodGestureLayer(
-            locked = state.locked,
-            onBrightness = onBrightness::onDelta,
-            onVolume = onVolume::onDelta,
-            onSeekPreview = onSeekPreview::onPreview,
-            onSeekEnd = onSeekEnd::run,
-            onSingleTap = onSingleTap::run,
-            onDoubleTap = onDoubleTap::run,
-            onSpeedUp = onSpeedUp::run,
-            onSpeedEnd = onSpeedEnd::run,
-            onFlingUp = onFlingUp::run,
-            onFlingDown = onFlingDown::run,
-            onScale = onScale::onPinch,
-            onTouchEnd = onTouchEnd::run,
-        )
+        Box(Modifier.fillMaxSize()) {
+            VodGestureLayer(
+                locked = state.locked,
+                onBrightness = onBrightness::onDelta,
+                onVolume = onVolume::onDelta,
+                onSeekPreview = onSeekPreview::onPreview,
+                onSeekEnd = onSeekEnd::run,
+                onSingleTap = onSingleTap::run,
+                onDoubleTap = onDoubleTap::run,
+                onSpeedUp = onSpeedUp::run,
+                onSpeedEnd = onSpeedEnd::run,
+                onFlingUp = onFlingUp::run,
+                onFlingDown = onFlingDown::run,
+                onScale = onScale::onPinch,
+                onTouchEnd = onTouchEnd::run,
+            )
+            VodGestureHud(state = state)
+        }
     }
 }
 

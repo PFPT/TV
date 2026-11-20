@@ -43,4 +43,12 @@ data class VodUiState(
     val showCast: Boolean = false,
     val showPip: Boolean = false,
     val showRotate: Boolean = false,
+    val gestureBrightVisible: Boolean = false,
+    val gestureBrightProgress: Int = 0,
+    val gestureVolumeVisible: Boolean = false,
+    val gestureVolumeProgress: Int = 0,
+    val gestureSeekVisible: Boolean = false,
+    val gestureSeekForward: Boolean = true,
+    val gestureSeekTime: String = "",
+    val gestureSpeedVisible: Boolean = false,
 )

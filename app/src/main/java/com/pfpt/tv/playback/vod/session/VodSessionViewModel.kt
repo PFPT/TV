@@ -57,7 +57,68 @@ class VodSessionViewModel : ViewModel() {
             showCast = current.showCast,
             showPip = current.showPip,
             showRotate = current.showRotate,
+            gestureBrightVisible = current.gestureBrightVisible,
+            gestureBrightProgress = current.gestureBrightProgress,
+            gestureVolumeVisible = current.gestureVolumeVisible,
+            gestureVolumeProgress = current.gestureVolumeProgress,
+            gestureSeekVisible = current.gestureSeekVisible,
+            gestureSeekForward = current.gestureSeekForward,
+            gestureSeekTime = current.gestureSeekTime,
+            gestureSpeedVisible = current.gestureSpeedVisible,
         )
+    }
+
+    fun updateGestureHud(
+        brightVisible: Boolean,
+        brightProgress: Int,
+        volumeVisible: Boolean,
+        volumeProgress: Int,
+    ) {
+        _uiState.update {
+            it.copy(
+                gestureBrightVisible = brightVisible,
+                gestureBrightProgress = brightProgress.coerceIn(0, 100),
+                gestureVolumeVisible = volumeVisible,
+                gestureVolumeProgress = volumeProgress.coerceIn(0, 100),
+                gestureSeekVisible = false,
+                gestureSpeedVisible = false,
+            )
+        }
+    }
+
+    fun showSeekHud(forward: Boolean, time: String) {
+        _uiState.update {
+            it.copy(
+                gestureSeekVisible = true,
+                gestureSeekForward = forward,
+                gestureSeekTime = time,
+                gestureBrightVisible = false,
+                gestureVolumeVisible = false,
+                gestureSpeedVisible = false,
+            )
+        }
+    }
+
+    fun showSpeedHud() {
+        _uiState.update {
+            it.copy(
+                gestureSpeedVisible = true,
+                gestureBrightVisible = false,
+                gestureVolumeVisible = false,
+                gestureSeekVisible = false,
+            )
+        }
+    }
+
+    fun clearGestureHud() {
+        _uiState.update {
+            it.copy(
+                gestureBrightVisible = false,
+                gestureVolumeVisible = false,
+                gestureSeekVisible = false,
+                gestureSpeedVisible = false,
+            )
+        }
     }
 
     fun updateDanmakuChrome(show: Boolean, on: Boolean) {

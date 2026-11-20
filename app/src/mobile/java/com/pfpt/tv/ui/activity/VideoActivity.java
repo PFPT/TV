@@ -1331,33 +1331,28 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     @Override
     public void onSpeedUp() {
         if (!player().isPlaying()) return;
-        mBinding.widget.speed.setVisibility(View.VISIBLE);
-        mBinding.widget.speed.startAnimation(ResUtil.getAnim(R.anim.forward));
+        mBinding.widget.speed.setVisibility(View.GONE);
+        mSession.showSpeedHud();
         PlaybackAction.setSpeed(player(), PlayerSetting.getSpeed());
     }
 
     @Override
     public void onSpeedEnd() {
-        mBinding.widget.speed.clearAnimation();
+        mBinding.widget.speed.setVisibility(View.GONE);
+        mSession.clearGestureHud();
         PlaybackAction.setSpeed(player(), mHistory.getSpeed());
     }
 
     @Override
     public void onBright(int progress) {
-        mBinding.widget.bright.setVisibility(View.VISIBLE);
-        mBinding.widget.brightProgress.setProgress(progress);
-        if (progress < 35) mBinding.widget.brightIcon.setImageResource(R.drawable.ic_widget_bright_low);
-        else if (progress < 70) mBinding.widget.brightIcon.setImageResource(R.drawable.ic_widget_bright_medium);
-        else mBinding.widget.brightIcon.setImageResource(R.drawable.ic_widget_bright_high);
+        mBinding.widget.bright.setVisibility(View.GONE);
+        mSession.updateGestureHud(true, progress, false, 0);
     }
 
     @Override
     public void onVolume(int progress) {
-        mBinding.widget.volume.setVisibility(View.VISIBLE);
-        mBinding.widget.volumeProgress.setProgress(progress);
-        if (progress < 35) mBinding.widget.volumeIcon.setImageResource(R.drawable.ic_widget_volume_low);
-        else if (progress < 70) mBinding.widget.volumeIcon.setImageResource(R.drawable.ic_widget_volume_medium);
-        else mBinding.widget.volumeIcon.setImageResource(R.drawable.ic_widget_volume_high);
+        mBinding.widget.volume.setVisibility(View.GONE);
+        mSession.updateGestureHud(false, 0, true, progress);
     }
 
     @Override
@@ -1374,9 +1369,8 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
 
     @Override
     public void onSeeking(long time) {
-        mBinding.widget.action.setImageResource(time > 0 ? R.drawable.ic_widget_forward : R.drawable.ic_widget_rewind);
-        mBinding.widget.time.setText(player().getPositionTime(time));
-        mBinding.widget.seek.setVisibility(View.VISIBLE);
+        mBinding.widget.seek.setVisibility(View.GONE);
+        mSession.showSeekHud(time > 0, player().getPositionTime(time));
         hideProgress();
     }
 
@@ -1411,6 +1405,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         mBinding.widget.speed.setVisibility(View.GONE);
         mBinding.widget.bright.setVisibility(View.GONE);
         mBinding.widget.volume.setVisibility(View.GONE);
+        mSession.clearGestureHud();
     }
 
     private void onComposeBrightness(float delta) {

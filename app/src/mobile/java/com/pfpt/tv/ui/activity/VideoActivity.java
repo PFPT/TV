@@ -1500,12 +1500,10 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void onSheetPlayEpisode(int index) {
-        sheetController.dismiss();
         onComposeEpisode(index);
     }
 
     private void onSheetDownloadEpisode(int index) {
-        sheetController.dismiss();
         if (index < 0 || index >= mEpisodeAdapter.getItemCount()) return;
         onDownloadEpisode(mEpisodeAdapter.getItems().get(index));
     }

@@ -1,6 +1,14 @@
 package com.pfpt.tv.ui.vod.compose
 
 import android.view.View
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -18,14 +26,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,9 +53,15 @@ import com.pfpt.tv.playback.vod.session.VodEpisodeItem
 import com.pfpt.tv.playback.vod.session.VodSessionViewModel
 import com.pfpt.tv.ui.dialog.DownloadDialog
 import com.pfpt.tv.utils.Util
+import kotlinx.coroutines.launch
 
 private val SheetContainer = Color(0xFF1E1E1E)
 private val SheetAccent = Color(0xFF8AB4F8)
+private val EpisodeSelectedBg = Color.White
+private val EpisodeUnselectedBg = Color.White.copy(alpha = 0.08f)
+private const val SheetMotionMs = 200
+private const val StaggerDelayMs = 25
+private const val StaggerMaxIndex = 7
 
 enum class VodSheetKind {
     None,
@@ -147,7 +163,7 @@ fun ComposeView.setVodSheetHost(
     setContent {
         val ui by session.uiState.collectAsStateWithLifecycle()
         val kind = controller.kind
-        SideEffect {
+        LaunchedEffect(kind) {
             visibility = if (kind == VodSheetKind.None) View.GONE else View.VISIBLE
         }
         when (kind) {
@@ -163,10 +179,7 @@ fun ComposeView.setVodSheetHost(
                 episodes = ui.episodes,
                 download = true,
                 onEpisode = { onEpisodeDownload.onClick(it) },
-                onOpenList = {
-                    onDownloadList.run()
-                    controller.dismiss()
-                },
+                onOpenList = onDownloadList::run,
                 onDismiss = controller::dismiss,
             )
             VodSheetKind.DownloadConfirm -> {
@@ -184,13 +197,27 @@ fun ComposeView.setVodSheetHost(
                 if (info != null) {
                     InfoSheet(
                         info = info,
-                        onShare = {
-                            onInfoShare.onShare(info.title)
-                            controller.dismiss()
-                        },
+                        onShare = { onInfoShare.onShare(info.title) },
                         onDismiss = controller::dismiss,
                     )
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun rememberHideThenDismiss(
+    sheetState: SheetState,
+    onDismiss: () -> Unit,
+): () -> Unit {
+    val scope = rememberCoroutineScope()
+    return remember(sheetState, onDismiss) {
+        {
+            scope.launch {
+                sheetState.hide()
+                onDismiss()
             }
         }
     }
@@ -206,13 +233,15 @@ fun EpisodePickerSheet(
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val dismiss = rememberHideThenDismiss(sheetState, onDismiss)
+    val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     val selected = episodes.indexOfFirst { it.selected }
     LaunchedEffect(selected, episodes.size) {
         if (selected in episodes.indices) listState.scrollToItem(selected)
     }
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = dismiss,
         sheetState = sheetState,
         containerColor = SheetContainer,
         contentColor = Color.White,
@@ -232,7 +261,15 @@ fun EpisodePickerSheet(
                     text = stringResource(R.string.download_list),
                     color = SheetAccent,
                     fontSize = 14.sp,
-                    modifier = Modifier.clickable(onClick = onOpenList).padding(4.dp),
+                    modifier = Modifier
+                        .clickable {
+                            scope.launch {
+                                sheetState.hide()
+                                onDismiss()
+                                onOpenList()
+                            }
+                        }
+                        .padding(4.dp),
                 )
             }
         }
@@ -241,25 +278,75 @@ fun EpisodePickerSheet(
             modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp),
         ) {
             itemsIndexed(episodes, key = { index, _ -> index }) { index, item ->
-                Text(
-                    text = item.name,
-                    color = if (item.selected) Color.Black else Color.White,
-                    fontSize = 14.sp,
-                    fontWeight = if (item.selected) FontWeight.SemiBold else FontWeight.Normal,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                        .background(
-                            if (item.selected) Color.White else Color.White.copy(alpha = 0.08f),
-                            RoundedCornerShape(4.dp),
-                        )
-                        .clickable { onEpisode(index) }
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                EpisodeRow(
+                    name = item.name,
+                    selected = item.selected,
+                    index = index,
+                    onClick = {
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                            onEpisode(index)
+                        }
+                    },
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun EpisodeRow(
+    name: String,
+    selected: Boolean,
+    index: Int,
+    onClick: () -> Unit,
+) {
+    val visibleState = remember {
+        MutableTransitionState(false).apply { targetState = true }
+    }
+    val bg by animateColorAsState(
+        targetValue = if (selected) EpisodeSelectedBg else EpisodeUnselectedBg,
+        animationSpec = tween(SheetMotionMs, easing = FastOutSlowInEasing),
+        label = "episodeBg",
+    )
+    val fg by animateColorAsState(
+        targetValue = if (selected) Color.Black else Color.White,
+        animationSpec = tween(SheetMotionMs, easing = FastOutSlowInEasing),
+        label = "episodeFg",
+    )
+    AnimatedVisibility(
+        visibleState = visibleState,
+        enter = fadeIn(
+            animationSpec = tween(
+                durationMillis = SheetMotionMs,
+                delayMillis = minOf(index, StaggerMaxIndex) * StaggerDelayMs,
+                easing = FastOutSlowInEasing,
+            ),
+        ) + slideInVertically(
+            animationSpec = tween(
+                durationMillis = SheetMotionMs,
+                delayMillis = minOf(index, StaggerMaxIndex) * StaggerDelayMs,
+                easing = FastOutSlowInEasing,
+            ),
+            initialOffsetY = { it / 4 },
+        ),
+        exit = fadeOut(animationSpec = tween(0)),
+    ) {
+        Text(
+            text = name,
+            color = fg,
+            fontSize = 14.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .background(bg, RoundedCornerShape(4.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        )
     }
 }
 
@@ -272,8 +359,9 @@ fun DownloadConfirmSheet(
 ) {
     val installed = DownloadDialog.isPlayerInstalled(LocalContext.current)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val dismiss = rememberHideThenDismiss(sheetState, onDismiss)
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = dismiss,
         sheetState = sheetState,
         containerColor = SheetContainer,
         contentColor = Color.White,
@@ -348,7 +436,7 @@ fun DownloadConfirmSheet(
                 )
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss) {
+                TextButton(onClick = dismiss) {
                     Text(text = stringResource(R.string.dialog_negative))
                 }
                 TextButton(onClick = onConfirm, enabled = installed) {
@@ -367,8 +455,10 @@ fun InfoSheet(
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val dismiss = rememberHideThenDismiss(sheetState, onDismiss)
+    val scope = rememberCoroutineScope()
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = dismiss,
         sheetState = sheetState,
         containerColor = SheetContainer,
         contentColor = Color.White,
@@ -405,9 +495,18 @@ fun InfoSheet(
                     fontSize = 14.sp,
                     modifier = Modifier
                         .padding(top = 8.dp)
-                        .combinedClickable(onClick = onShare, onLongClick = {
-                            Util.copy(info.url)
-                        }),
+                        .combinedClickable(
+                            onClick = {
+                                scope.launch {
+                                    sheetState.hide()
+                                    onDismiss()
+                                    onShare()
+                                }
+                            },
+                            onLongClick = {
+                                Util.copy(info.url)
+                            },
+                        ),
                 )
             }
         }

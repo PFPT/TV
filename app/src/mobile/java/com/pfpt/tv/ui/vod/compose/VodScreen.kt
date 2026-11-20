@@ -11,6 +11,8 @@ fun VodScreen(
     onKeepClick: () -> Unit,
     onTitleClick: () -> Unit,
     onTitleLongClick: () -> Unit,
+    onSiteClick: () -> Unit = {},
+    onRemarkClick: () -> Unit = {},
     onFlagClick: (Int) -> Unit = {},
     onEpisodeClick: (Int) -> Unit = {},
     onQualityClick: (Int) -> Unit = {},
@@ -23,6 +25,8 @@ fun VodScreen(
             onKeepClick = onKeepClick,
             onTitleClick = onTitleClick,
             onTitleLongClick = onTitleLongClick,
+            onSiteClick = onSiteClick,
+            onRemarkClick = onRemarkClick,
         )
         if (showCatalog) {
             VodCatalog(

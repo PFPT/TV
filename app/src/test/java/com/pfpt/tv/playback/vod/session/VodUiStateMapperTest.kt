@@ -110,6 +110,8 @@ class VodUiStateMapperTest {
         assertEquals(0L, ui.durationMs)
         assertEquals(1f, ui.speed, 0f)
         assertEquals(false, ui.fullscreen)
+        assertEquals(false, ui.danmakuOn)
+        assertEquals(false, ui.showDanmaku)
         val copied = ui.copy(
             controlsVisible = true,
             locked = true,
@@ -118,6 +120,8 @@ class VodUiStateMapperTest {
             durationMs = 9000L,
             speed = 1.5f,
             fullscreen = true,
+            danmakuOn = true,
+            showDanmaku = true,
         )
         assertEquals(true, copied.controlsVisible)
         assertEquals(true, copied.locked)
@@ -136,11 +140,16 @@ class VodUiStateMapperTest {
             durationMs = copied.durationMs,
             speed = copied.speed,
             fullscreen = copied.fullscreen,
+            danmakuOn = copied.danmakuOn,
+            showDanmaku = copied.showDanmaku,
         )
         assertEquals(false, mapped.controlsVisible)
         assertEquals(0L, mapped.positionMs)
+        assertEquals(false, mapped.showDanmaku)
         assertEquals(true, restored.controlsVisible)
         assertEquals(1500L, restored.positionMs)
         assertEquals(1.5f, restored.speed, 0f)
+        assertEquals(true, restored.danmakuOn)
+        assertEquals(true, restored.showDanmaku)
     }
 }

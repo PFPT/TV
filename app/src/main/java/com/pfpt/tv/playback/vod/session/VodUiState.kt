@@ -38,4 +38,9 @@ data class VodUiState(
     val durationMs: Long = 0L,
     val speed: Float = 1f,
     val fullscreen: Boolean = false,
+    val danmakuOn: Boolean = false,
+    val showDanmaku: Boolean = false,
+    val showCast: Boolean = false,
+    val showPip: Boolean = false,
+    val showRotate: Boolean = false,
 )

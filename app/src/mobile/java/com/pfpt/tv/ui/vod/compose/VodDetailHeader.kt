@@ -1,5 +1,6 @@
 package com.pfpt.tv.ui.vod.compose
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,8 +10,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.pfpt.tv.R
 import com.pfpt.tv.playback.vod.session.VodUiState
 
 @Composable
@@ -19,6 +22,8 @@ fun VodDetailHeader(
     onKeepClick: () -> Unit,
     onTitleClick: () -> Unit,
     onTitleLongClick: () -> Unit,
+    onSiteClick: () -> Unit,
+    onRemarkClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -30,13 +35,26 @@ fun VodDetailHeader(
             modifier = Modifier.combinedClickable(onClick = onTitleClick, onLongClick = onTitleLongClick),
         )
         if (state.remark.isNotEmpty()) {
-            Text(text = state.remark, color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
+            Text(
+                text = state.remark,
+                color = Color.White,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 8.dp).clickable(onClick = onRemarkClick),
+            )
         }
         if (state.siteName.isNotEmpty()) {
-            Text(text = state.siteName, color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
+            Text(
+                text = state.siteName,
+                color = Color.White,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 8.dp).clickable(onClick = onSiteClick),
+            )
         }
         TextButton(onClick = onKeepClick) {
-            Text(text = if (state.kept) "已收藏" else "收藏", color = Color.White)
+            Text(
+                text = stringResource(if (state.kept) R.string.keep_toggle_on else R.string.keep_toggle_off),
+                color = Color.White,
+            )
         }
     }
 }

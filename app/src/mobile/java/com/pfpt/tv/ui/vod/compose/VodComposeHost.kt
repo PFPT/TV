@@ -35,6 +35,8 @@ fun ComposeView.setVodScreen(
     onKeepClick: Runnable,
     onTitleClick: Runnable,
     onTitleLongClick: Runnable,
+    onSiteClick: Runnable,
+    onRemarkClick: Runnable,
     onFlagClick: VodIndexClick? = null,
     onEpisodeClick: VodIndexClick? = null,
     onQualityClick: VodIndexClick? = null,
@@ -47,6 +49,8 @@ fun ComposeView.setVodScreen(
             onKeepClick = onKeepClick::run,
             onTitleClick = onTitleClick::run,
             onTitleLongClick = onTitleLongClick::run,
+            onSiteClick = onSiteClick::run,
+            onRemarkClick = onRemarkClick::run,
             onFlagClick = { index -> onFlagClick?.onClick(index) },
             onEpisodeClick = { index -> onEpisodeClick?.onClick(index) },
             onQualityClick = { index -> onQualityClick?.onClick(index) },
@@ -71,6 +75,10 @@ fun setVodControlBars(
     onMore: Runnable,
     onSeek: VodSeek,
     onScrub: VodScrub,
+    onCast: Runnable,
+    onPip: Runnable,
+    onRotate: Runnable,
+    onDanmaku: Runnable,
 ) {
     top.setContent {
         val state by session.uiState.collectAsStateWithLifecycle()
@@ -80,6 +88,8 @@ fun setVodControlBars(
                 onBack = onBack::run,
                 onKeep = onKeep::run,
                 onMore = onMore::run,
+                onCast = onCast::run,
+                onDanmaku = onDanmaku::run,
             )
         }
     }
@@ -108,6 +118,8 @@ fun setVodControlBars(
                 onSeek = onSeek::onSeek,
                 onScrub = onScrub::onScrub,
                 onFullscreen = onFullscreen::run,
+                onPip = onPip::run,
+                onRotate = onRotate::run,
             )
         }
     }

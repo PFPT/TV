@@ -17,8 +17,6 @@ import com.pfpt.tv.playback.vod.VodPlayRequest;
 import com.pfpt.tv.playback.vod.VodPlaybackHost;
 import com.pfpt.tv.playback.vod.VodPlaybackMedia;
 import com.pfpt.tv.playback.vod.VodPlaybackNotify;
-import com.pfpt.tv.utils.Util;
-
 import java.util.List;
 
 class VodPlaybackBinder implements VodPlaybackHost {
@@ -107,9 +105,8 @@ class VodPlaybackBinder implements VodPlaybackHost {
 
     @Override
     public void requestPlayer(VodPlayRequest request) {
-        activity.mBinding.control.title.setText(activity.getString(R.string.detail_title, activity.mBinding.name.getText(), request.getTitle()));
+        activity.setPlayTitle(activity.getString(R.string.detail_title, activity.mBinding.name.getText(), request.getTitle()));
         activity.mViewModel.playerContent(request.getKey(), request.getFlag(), request.getId());
-        activity.mBinding.control.title.setSelected(true);
         activity.showProgress();
     }
 
@@ -242,16 +239,13 @@ class VodPlaybackBinder implements VodPlaybackHost {
     @Override
     public void renderHistory(History history) {
         activity.mHistory = history;
-        activity.mBinding.control.action.opening.setText(history.getOpening() <= 0 ? activity.getString(R.string.play_op) : Util.timeMs(history.getOpening()));
-        activity.mBinding.control.action.ending.setText(history.getEnding() <= 0 ? activity.getString(R.string.play_ed) : Util.timeMs(history.getEnding()));
-        PlaybackAction.setSpeed(activity.player(), activity.mBinding.control.action.speed, history.getSpeed());
+        PlaybackAction.setSpeed(activity.player(), history.getSpeed());
         activity.setScale(activity.getScale());
     }
 
     @Override
     public void renderUseParse(boolean useParse) {
         activity.setUseParse(useParse);
-        activity.mBinding.control.action.parse.setVisibility(activity.isUseParse() ? View.VISIBLE : View.GONE);
     }
 
     @Override

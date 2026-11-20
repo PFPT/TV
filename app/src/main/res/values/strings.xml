@@ -23,6 +23,9 @@
     <string name="keep">Keep</string>
     <string name="keep_add">Added</string>
     <string name="keep_del">Removed</string>
+    <string name="keep_toggle_off">Keep</string>
+    <string name="keep_toggle_on">Kept</string>
+    <string name="control_more">More</string>
 
     <!-- Play -->
     <string name="play">Play</string>

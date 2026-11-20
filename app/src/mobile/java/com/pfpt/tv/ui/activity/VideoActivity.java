@@ -1,7 +1,6 @@
 package com.pfpt.tv.ui.activity;
 
 import android.animation.ValueAnimator;
-import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -14,7 +13,6 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.text.style.ClickableSpan;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -85,7 +83,6 @@ import com.pfpt.tv.ui.dialog.ControlDialog;
 import com.pfpt.tv.ui.dialog.DanmakuDialog;
 import com.pfpt.tv.ui.dialog.DownloadDialog;
 import com.pfpt.tv.ui.dialog.EditionDialog;
-import com.pfpt.tv.ui.dialog.EpisodeListDialog;
 import com.pfpt.tv.ui.dialog.ParseDialog;
 import com.pfpt.tv.ui.dialog.PlayerEngineDialog;
 import com.pfpt.tv.ui.dialog.ReceiveDialog;
@@ -100,7 +97,6 @@ import com.pfpt.tv.playback.vod.session.VodDownloadResolver;
 import com.pfpt.tv.playback.vod.session.VodEpisodeItem;
 import com.pfpt.tv.playback.vod.session.VodFlagItem;
 import com.pfpt.tv.playback.vod.session.VodSessionViewModel;
-import com.pfpt.tv.playback.vod.session.VodUiState;
 import com.pfpt.tv.ui.vod.compose.VodComposeHostKt;
 import com.pfpt.tv.ui.vod.compose.VodDownloadConfirm;
 import com.pfpt.tv.ui.vod.compose.VodSheetController;
@@ -144,14 +140,15 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     private VodPlaybackController mVod;
     VideoViewModel mViewModel;
     private VodSessionViewModel mSession;
+    private String siteRawForCompose;
+    private String remarkRawForCompose;
     private ValueAnimator mAnimator;
     private CustomKeyDown mKeyDown;
     History mHistory;
     private boolean fullscreen;
     private boolean useParse;
     private boolean rotate;
-    private final boolean useComposeControls = true;
-    private final boolean useComposeGestures = true;
+    private String playTitle = "";
     private final VodSheetController sheetController = new VodSheetController();
     private boolean gestureBrightArmed;
     private float gestureBright;
@@ -248,14 +245,18 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         return mEpisodeAdapter.isEmpty() ? new Episode() : mEpisodeAdapter.getActivated();
     }
 
-    int getScale() {
+    @Override
+    public int getScale() {
         return History.resolveScale(mHistory);
+    }
+
+    void setPlayTitle(CharSequence title) {
+        playTitle = title == null ? "" : title.toString();
     }
 
     void setScale(int scale) {
         mVod.setScale(scale);
         mBinding.player.setResizeMode(scale);
-        mBinding.control.action.scale.setText(ResUtil.getStringArray(R.array.select_scale)[scale]);
     }
 
     private boolean isAutoRotate() {
@@ -287,7 +288,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     @Override
     protected PlayerSeekView getSeekView() {
-        return mBinding.control.seek;
+        return null;
     }
 
     @Override
@@ -321,7 +322,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mObserveDetail = this::onDetailObserved;
         mObservePlayer = this::onPlayerObserved;
         mObserveSearch = this::onSearchObserved;
-        mClock = Clock.create().view(mBinding.widget.clock).add(mBinding.control.clock).format("HH:mm");
+        mClock = Clock.create().view(mBinding.widget.clock).format("HH:mm");
         mR1 = this::hideControl;
         mR2 = this::setTraffic;
         mR3 = this::setOrient;
@@ -336,7 +337,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     @Override
-    @SuppressLint("ClickableViewAccessibility")
     protected void initEvent() {
         mBinding.name.setOnClickListener(view -> onName());
         mBinding.download.setOnClickListener(view -> onDownload());
@@ -347,42 +347,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mBinding.director.setOnClickListener(view -> onDirector());
         mBinding.name.setOnLongClickListener(view -> onChange());
         mBinding.content.setOnLongClickListener(view -> onCopy());
-        mBinding.control.back.setOnClickListener(view -> onBack());
-        mBinding.control.cast.setOnClickListener(view -> onCast());
-        mBinding.control.info.setOnClickListener(view -> onInfo());
-        mBinding.control.keep.setOnClickListener(view -> onKeep());
-        mBinding.control.play.setOnClickListener(view -> checkPlay());
-        mBinding.control.next.setOnClickListener(view -> checkNext());
-        mBinding.control.prev.setOnClickListener(view -> checkPrev());
-        mBinding.control.setting.setOnClickListener(view -> onSetting());
-        mBinding.control.title.setOnLongClickListener(view -> onChange());
-        mBinding.control.right.lock.setOnClickListener(view -> onLock());
-        mBinding.control.right.pip.setOnClickListener(view -> onPip());
-        mBinding.control.right.rotate.setOnClickListener(view -> onRotate());
-        mBinding.control.fullscreen.setOnClickListener(view -> enterFullscreen());
-        mBinding.control.danmaku.setOnClickListener(view -> onDanmakuShow());
-        mBinding.control.action.text.setOnClickListener(this::onTrack);
-        mBinding.control.action.audio.setOnClickListener(this::onTrack);
-        mBinding.control.action.video.setOnClickListener(this::onTrack);
-        mBinding.control.action.scale.setOnClickListener(view -> onScale());
-        mBinding.control.action.speed.setOnClickListener(view -> onSpeed());
-        mBinding.control.action.reset.setOnClickListener(view -> onReset());
-        mBinding.control.action.replay.setOnClickListener(view -> onReplay());
-        mBinding.control.action.parse.setOnClickListener(view -> onParse());
-        mBinding.control.action.player.setOnClickListener(view -> onChoose());
-        mBinding.control.action.decode.setOnClickListener(view -> onDecode());
-        mBinding.control.action.ending.setOnClickListener(view -> onEnding());
-        mBinding.control.action.repeat.setOnClickListener(view -> onRepeat());
-        mBinding.control.action.opening.setOnClickListener(view -> onOpening());
-        mBinding.control.action.danmaku.setOnClickListener(view -> onDanmaku());
-        mBinding.control.action.edition.setOnClickListener(view -> onEdition());
-        mBinding.control.action.chapter.setOnClickListener(view -> onChapter());
-        mBinding.control.action.episodes.setOnClickListener(view -> onEpisodes());
-        mBinding.control.action.text.setOnLongClickListener(view -> onTextLong());
-        mBinding.control.action.ending.setOnLongClickListener(view -> onEndingReset());
-        mBinding.control.action.opening.setOnLongClickListener(view -> onOpeningReset());
-        if (!useComposeGestures) mBinding.video.setOnTouchListener((view, event) -> mKeyDown.onTouchEvent(event));
-        mBinding.control.action.getRoot().setOnTouchListener(this::onActionTouch);
         mBinding.swipeLayout.setOnRefreshListener(this::onSwipeRefresh);
     }
 
@@ -411,8 +375,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void setVideoView() {
-        PlayerEngineDialog.setText(mBinding.control.action.player);
-        mBinding.control.action.danmaku.setVisibility(DanmakuSetting.isLoad() ? View.VISIBLE : View.GONE);
         mBinding.video.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> mPiP.update(this, view));
     }
 
@@ -434,38 +396,21 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         });
     }
 
-    private void setPlaybackMode() {
-        PlaybackAction.setPlaybackMode(player(), mBinding.control.action.player, mBinding.control.action.decode);
-    }
-
     private void setViewModel() {
         mViewModel = new ViewModelProvider(this).get(VideoViewModel.class);
         mSession = new ViewModelProvider(this).get(VodSessionViewModel.class);
         mSession.bind(mViewModel.getPlaybackState());
-        mSession.getUiStateLiveData().observe(this, this::onSessionState);
-        VodComposeHostKt.setVodScreen(mBinding.detailCompose, mSession, this::onKeep, this::onName, () -> onChange(), this::onComposeFlag, this::onComposeEpisode, this::onComposeQuality);
+        VodComposeHostKt.setVodScreen(mBinding.detailCompose, mSession, this::onKeep, this::onName, () -> onChange(), this::onComposeSiteClick, this::onComposeRemarkClick, this::onComposeFlag, this::onComposeEpisode, this::onComposeQuality);
         VodComposeHostKt.setVodFlags(mBinding.flagCompose, mSession, this::onComposeFlag);
         VodComposeHostKt.setVodQualities(mBinding.qualityCompose, mSession, this::onComposeQuality);
         VodComposeHostKt.setVodEpisodes(mBinding.episodeCompose, mSession, this::onComposeEpisode);
         VodSheetsKt.setVodSheetHost(mBinding.sheetCompose, mSession, sheetController, this::onSheetPlayEpisode, this::onSheetDownloadEpisode, this::onSheetDownloadList, this::onSheetDownloadConfirm, this::onSheetInfoShare);
-        if (useComposeControls) {
-            mBinding.control.getRoot().setVisibility(View.GONE);
-            VodComposeHostKt.setVodControlBars(mBinding.controlTopCompose, mBinding.controlCenterCompose, mBinding.controlLockCompose, mBinding.controlBottomCompose, mSession, this::onBack, this::checkPlay, this::checkNext, this::checkPrev, this::onLock, this::onKeep, this::enterFullscreen, this::onSetting, this::onComposeSeek, this::onComposeScrub);
-        }
-        if (useComposeGestures) {
-            VodComposeHostKt.setVodGestureLayer(mBinding.gestureCompose, mSession, this::onComposeBrightness, this::onComposeVolume, this::onComposeSeekPreview, this::onComposeSeekEnd, this::onSingleTap, this::onDoubleTap, this::onSpeedUp, this::onSpeedEnd, this::onComposeFlingUp, this::onComposeFlingDown, this::onComposeScale, this::onComposeTouchEnd);
-        } else {
-            mBinding.gestureCompose.setVisibility(View.GONE);
-        }
+        VodComposeHostKt.setVodControlBars(mBinding.controlTopCompose, mBinding.controlCenterCompose, mBinding.controlLockCompose, mBinding.controlBottomCompose, mSession, this::onBack, this::checkPlay, this::checkNext, this::checkPrev, this::onLock, this::onKeep, this::enterFullscreen, this::onSetting, this::onComposeSeek, this::onComposeScrub, this::onCast, this::onPip, this::onRotate, this::onDanmakuShow);
+        VodComposeHostKt.setVodGestureLayer(mBinding.gestureCompose, mSession, this::onComposeBrightness, this::onComposeVolume, this::onComposeSeekPreview, this::onComposeSeekEnd, this::onSingleTap, this::onDoubleTap, this::onSpeedUp, this::onSpeedEnd, this::onComposeFlingUp, this::onComposeFlingDown, this::onComposeScale, this::onComposeTouchEnd);
         observeForever(mViewModel.getResult(), mObserveDetail);
         observeForever(mViewModel.getPlayer(), mObservePlayer);
         observeForever(mViewModel.getSearch(), mObserveSearch);
         mVod = mViewModel.createPlaybackController(new VodPlaybackBinder(this));
-    }
-
-    private void onSessionState(VodUiState state) {
-        if (state == null || isFinishing() || isDestroyed()) return;
-        mBinding.control.keep.setImageResource(state.getKept() ? R.drawable.ic_control_keep_on : R.drawable.ic_control_keep_off);
     }
 
     private void onDetailObserved(Result result) {
@@ -500,6 +445,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     void setText(Vod item) {
         String siteRaw = getSite().getName();
         String remarkRaw = item.getRemarks();
+        siteRawForCompose = siteRaw;
+        remarkRawForCompose = remarkRaw;
         setText(mBinding.site, R.string.detail_site, siteRaw);
         setText(mBinding.director, R.string.detail_director, item.getDirector());
         setText(mBinding.actor, R.string.detail_actor, item.getActor());
@@ -544,6 +491,30 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
                 setRedirect(true);
             }
         };
+    }
+
+    private void onComposeSiteClick() {
+        openSniffedLinks(siteRawForCompose);
+    }
+
+    private void onComposeRemarkClick() {
+        openSniffedLinks(remarkRawForCompose);
+    }
+
+    private void openSniffedLinks(String text) {
+        if (TextUtils.isEmpty(text)) return;
+        final Result[] link = new Result[1];
+        Sniffer.buildClickable(text, result -> {
+            if (link[0] == null) link[0] = result;
+            return new ClickableSpan() {
+                @Override
+                public void onClick(@NonNull View view) {
+                }
+            };
+        });
+        if (link[0] == null) return;
+        FolderActivity.start(getActivity(), getKey(), link[0]);
+        setRedirect(true);
     }
 
     private void setOther(TextView view, Vod item) {
@@ -614,9 +585,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     void setEpisodeAdapter(List<Episode> items) {
-        mBinding.control.action.episodes.setVisibility(items.size() < 2 ? View.GONE : View.VISIBLE);
-        mBinding.control.next.setVisibility(items.size() < 2 ? View.GONE : View.VISIBLE);
-        mBinding.control.prev.setVisibility(items.size() < 2 ? View.GONE : View.VISIBLE);
         mBinding.reverse.setVisibility(items.size() < 2 ? View.GONE : View.VISIBLE);
         mBinding.episode.setVisibility(View.GONE);
         mBinding.more.setVisibility(items.size() < 10 ? View.GONE : View.VISIBLE);
@@ -682,11 +650,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         CastDialog.create().history(mHistory).video(new CastVideo(mBinding.name.getText().toString(), player().getUrl(), player().getPosition(), player().getHeaders())).fm(true).show(this);
     }
 
-    private void onInfo() {
-        ensureSheetHost();
-        sheetController.showInfo(mBinding.control.title.getText(), player().getUrl(), player().getHeaders());
-    }
-
     private void onKeep() {
         if (mHistory == null || mSession == null) return;
         mSession.toggleKeep(getHistoryKey(), VodConfig.getCid(), mHistory.getVodName(), mHistory.getVodPic(), getSite().getName(), (kept, removed) -> {
@@ -717,14 +680,13 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void onSetting() {
-        ControlDialog.create().parent(mBinding).history(mHistory).parse(isUseParse()).player(player()).show(this);
+        ControlDialog.create().parse(isUseParse()).player(player()).show(this);
     }
 
     private void onLock() {
         setLock(!isLock());
         setRequestedOrientation(getLockOrient());
         mKeyDown.setLock(isLock());
-        checkLockImg();
         showControl();
     }
 
@@ -734,22 +696,26 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         setRequestedOrientation(PlaybackOrientation.getRotateOrientation(this));
     }
 
-    private void onTrack(View view) {
-        TrackDialog.create().type(Integer.parseInt(view.getTag().toString())).player(player()).show(this);
+    @Override
+    public void onTrack(int type) {
+        TrackDialog.create().type(type).player(player()).show(this);
         hideControl();
     }
 
-    private void onEdition() {
+    @Override
+    public void onEdition() {
         EditionDialog.create().player(player()).show(this);
         hideControl();
     }
 
-    private void onChapter() {
+    @Override
+    public void onChapter() {
         ChapterDialog.create().player(player()).show(this);
         hideControl();
     }
 
-    private void onDanmaku() {
+    @Override
+    public void onDanmaku() {
         DanmakuDialog.create().player(player()).show(this);
         hideControl();
     }
@@ -760,37 +726,16 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         syncDanmakuEnabled();
     }
 
-    private void onRepeat() {
+    @Override
+    public void onRepeat() {
         player().setRepeatOne(!player().isRepeatOne());
-        mBinding.control.action.repeat.setSelected(player().isRepeatOne());
     }
 
     @Override
-    public void onRepeatModeChanged(int repeatMode) {
-        mBinding.control.action.repeat.setSelected(player().isRepeatOne());
-    }
-
-    private void onScale() {
-        int index = getScale();
-        String[] array = ResUtil.getStringArray(R.array.select_scale);
-        if (mKeyDown.getScale() != 1.0f) mKeyDown.resetScale();
-        else setScale(PlayerSetting.nextScale(index, array.length));
-        setR1Callback();
-    }
-
-    private void onSpeed() {
-        mVod.setSpeed(PlaybackAction.addSpeed(player(), mBinding.control.action.speed));
-        setR1Callback();
+    public void onSpeedChanged(float speed) {
+        player().setSpeed(speed);
+        if (mVod != null) mVod.setSpeed(player().getSpeed());
         pushPlaybackProgress(readPositionMs(), readDurationMs());
-    }
-
-    private void onReset() {
-        onRefresh();
-    }
-
-    private void onParse() {
-        ParseDialog.create().show(this);
-        hideControl();
     }
 
     private void onReplay() {
@@ -801,20 +746,23 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mVod.refresh();
     }
 
-    private void onDecode() {
+    @Override
+    public void onDecode() {
         mClock.setCallback(null);
         PlaybackAction.toggleDecode(player());
         setR1Callback();
     }
 
-    private void onEnding() {
+    @Override
+    public void onEnding() {
         long position = player().getPosition();
         long duration = player().getDuration();
         if (player().canSetEnding(position, duration)) setEnding(duration - position);
         setR1Callback();
     }
 
-    private boolean onEndingReset() {
+    @Override
+    public boolean onEndingReset() {
         setR1Callback();
         setEnding(0);
         return true;
@@ -822,17 +770,18 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void setEnding(long ending) {
         mVod.setEnding(ending);
-        mBinding.control.action.ending.setText(ending <= 0 ? getString(R.string.play_ed) : Util.timeMs(mHistory.getEnding()));
     }
 
-    private void onOpening() {
+    @Override
+    public void onOpening() {
         long position = player().getPosition();
         long duration = player().getDuration();
         if (player().canSetOpening(position, duration)) setOpening(position);
         setR1Callback();
     }
 
-    private boolean onOpeningReset() {
+    @Override
+    public boolean onOpeningReset() {
         setR1Callback();
         setOpening(0);
         return true;
@@ -840,27 +789,24 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void setOpening(long opening) {
         mVod.setOpening(opening);
-        mBinding.control.action.opening.setText(opening <= 0 ? getString(R.string.play_op) : Util.timeMs(mHistory.getOpening()));
     }
 
-    private void onEpisodes() {
-        EpisodeListDialog.create().episodes(mEpisodeAdapter.getItems()).show(this);
+    @Override
+    public String openingLabel() {
+        if (mHistory == null || mHistory.getOpening() <= 0) return getString(R.string.play_op);
+        return Util.timeMs(mHistory.getOpening());
     }
 
-    private void onChoose() {
-        PlayerEngineDialog.show(this, mBinding.control.action.player, player(), mBinding.control.title.getText());
+    @Override
+    public String endingLabel() {
+        if (mHistory == null || mHistory.getEnding() <= 0) return getString(R.string.play_ed);
+        return Util.timeMs(mHistory.getEnding());
+    }
+
+    @Override
+    public void onChoose() {
+        PlayerEngineDialog.show(this, null, player(), playTitle);
         hideControl();
-    }
-
-    private boolean onTextLong() {
-        if (!player().haveTrack(C.TRACK_TYPE_TEXT)) return false;
-        onSubtitleClick();
-        return true;
-    }
-
-    private boolean onActionTouch(View v, MotionEvent e) {
-        setR1Callback();
-        return false;
     }
 
     private void onSwipeRefresh() {
@@ -880,7 +826,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (isLand() && !player().isPortrait()) setTransition();
         mBinding.video.setLayoutParams(new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT));
         setRequestedOrientation(PlaybackOrientation.getEnterFullscreenOrientation(player().isPortrait()));
-        mBinding.control.title.setVisibility(View.VISIBLE);
         setRotate(player().isPortrait());
         mKeyDown.resetScale();
         App.post(mR3, 2000);
@@ -893,7 +838,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (isLand() && !player().isPortrait()) setTransition();
         setRequestedOrientation(PlaybackOrientation.getExitFullscreenOrientation(isPort()));
         mBinding.episode.postDelayed(() -> mBinding.episode.scrollToPosition(mEpisodeAdapter.getPosition()), 100);
-        mBinding.control.title.setVisibility(View.INVISIBLE);
         mBinding.video.setLayoutParams(mFrameParams);
         mKeyDown.resetScale();
         App.post(mR3, 2000);
@@ -944,8 +888,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private boolean isControlOpen() {
-        if (useComposeControls) return isVisible(mBinding.controlDim);
-        return isVisible(mBinding.control.getRoot());
+        return isVisible(mBinding.controlDim);
     }
 
     private void setComposeControlVisible(boolean open) {
@@ -968,47 +911,15 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     private void showControl() {
         if (service() == null || isInPictureInPictureMode()) return;
-        if (useComposeControls) {
-            mBinding.control.getRoot().setVisibility(View.GONE);
-            setComposeControlVisible(true);
-            syncComposeChrome(true);
-            updatePlayInfo();
-            setR1Callback();
-            return;
-        }
-        mBinding.control.danmaku.setVisibility(isLock() || !player().haveDanmaku() ? View.GONE : View.VISIBLE);
-        mBinding.control.setting.setVisibility(mHistory == null || isFullscreen() ? View.GONE : View.VISIBLE);
-        mBinding.control.right.rotate.setVisibility(isFullscreen() && !isLock() ? View.VISIBLE : View.GONE);
-        mBinding.control.keep.setVisibility(mHistory == null || isFullscreen() ? View.GONE : View.VISIBLE);
-        mBinding.control.position.setVisibility(View.VISIBLE);
-        mBinding.control.duration.setVisibility(View.VISIBLE);
-        mBinding.control.fullscreen.setVisibility(isFullscreen() ? View.GONE : View.VISIBLE);
-        mBinding.control.right.pip.setVisibility(!isFullscreen() && !PiP.noPiP() ? View.VISIBLE : View.GONE);
-        mBinding.control.action.getRoot().setVisibility(isFullscreen() ? View.VISIBLE : View.GONE);
-        mBinding.control.right.lock.setVisibility(isFullscreen() ? View.VISIBLE : View.GONE);
-        mBinding.control.action.parse.setVisibility(isUseParse() ? View.VISIBLE : View.GONE);
-        mBinding.control.info.setVisibility(player().isEmpty() ? View.GONE : View.VISIBLE);
-        mBinding.control.cast.setVisibility(player().isEmpty() ? View.GONE : View.VISIBLE);
-        mBinding.control.center.setVisibility(isLock() ? View.GONE : View.VISIBLE);
-        mBinding.control.bottom.setVisibility(isLock() ? View.GONE : View.VISIBLE);
-        mBinding.control.back.setVisibility(isLock() ? View.GONE : View.VISIBLE);
-        mBinding.control.top.setVisibility(isLock() ? View.GONE : View.VISIBLE);
-        mBinding.control.getRoot().setVisibility(View.VISIBLE);
-        updateMiniTime();
+        setComposeControlVisible(true);
+        syncComposeChrome(true);
         updatePlayInfo();
         setR1Callback();
     }
 
     private void hideControl() {
-        if (useComposeControls) {
-            mBinding.control.getRoot().setVisibility(View.GONE);
-            setComposeControlVisible(false);
-            syncComposeChrome(false);
-            updatePlayInfo();
-            App.removeCallbacks(mR1);
-            return;
-        }
-        mBinding.control.getRoot().setVisibility(View.GONE);
+        setComposeControlVisible(false);
+        syncComposeChrome(false);
         updatePlayInfo();
         App.removeCallbacks(mR1);
     }
@@ -1017,7 +928,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         boolean fullscreen = isFullscreen() && !isInPictureInPictureMode();
         boolean controlOpen = fullscreen && isControlOpen() && !isLock();
         mBinding.widget.playInfo.setVisibility(fullscreen && !controlOpen ? View.VISIBLE : View.GONE);
-        mBinding.control.clock.setVisibility(controlOpen ? View.VISIBLE : View.GONE);
         if (fullscreen && !isRotate()) setPadding(mBinding.widget.playInfo);
         else noPadding(mBinding.widget.playInfo);
     }
@@ -1086,12 +996,29 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mSession.loadKept(getHistoryKey());
     }
 
-    private void checkLockImg() {
-        mBinding.control.right.lock.setImageResource(isLock() ? R.drawable.ic_control_lock_on : R.drawable.ic_control_lock_off);
+    private void checkDanmakuImg() {
+        syncDanmakuChrome();
     }
 
-    private void checkDanmakuImg() {
-        mBinding.control.danmaku.setImageResource(DanmakuSetting.isShow() ? R.drawable.ic_control_danmaku_on : R.drawable.ic_control_danmaku_off);
+    private void syncDanmakuChrome() {
+        if (mSession == null) return;
+        pushComposeControlVisibility();
+    }
+
+    private void pushComposeControlVisibility() {
+        if (mSession == null) return;
+        boolean showCast = false;
+        boolean showDanmaku = false;
+        try {
+            if (service() != null) {
+                showCast = !player().isEmpty();
+                showDanmaku = player().haveDanmaku();
+            }
+        } catch (Exception ignored) {
+        }
+        boolean showPip = !isFullscreen() && !PiP.noPiP();
+        boolean showRotate = isFullscreen();
+        mSession.updateControlVisibility(showCast, showPip, showRotate, showDanmaku, DanmakuSetting.isShow());
     }
 
     void updateKeep() {
@@ -1111,7 +1038,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (name) mHistory.setVodName(item.getName());
         if (name) mBinding.name.setText(item.getName());
         if (name) updateDetailMeta(item.getName(), null, null);
-        if (name) mBinding.control.title.setText(item.getName());
+        if (name) setPlayTitle(item.getName());
         mVod.mergeFlags(item.getFlags());
         if (pic) setArtwork(item.getPic());
         if (pic || name) setMetadata();
@@ -1160,26 +1087,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     @Override
-    protected void onPrepare() {
-        setPlaybackMode();
-    }
-
-    @Override
-    protected void onDecodeChanged() {
-        setPlaybackMode();
-    }
-
-    @Override
-    protected void onTracksChanged() {
-        setTrackVisible();
-    }
-
-    @Override
-    protected void onMediaOptionsChanged() {
-        setMediaOptionVisible();
-    }
-
-    @Override
     protected void onError(String msg) {
         mVod.playbackError(msg);
     }
@@ -1212,13 +1119,8 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     @Override
     protected void onPlayingChanged(boolean isPlaying) {
-        if (isPlaying) {
-            mPiP.update(this, true);
-            mBinding.control.play.setImageResource(androidx.media3.ui.R.drawable.exo_icon_pause);
-        } else if (isPaused()) {
-            mPiP.update(this, false);
-            mBinding.control.play.setImageResource(androidx.media3.ui.R.drawable.exo_icon_play);
-        }
+        if (isPlaying) mPiP.update(this, true);
+        else if (isPaused()) mPiP.update(this, false);
         pushPlaybackProgress(readPositionMs(), readDurationMs());
     }
 
@@ -1300,14 +1202,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         mAnimator.start();
     }
 
-    private void setTrackVisible() {
-        PlaybackAction.setTracks(player(), mBinding.control.action.text, mBinding.control.action.audio, mBinding.control.action.video);
-    }
-
-    private void setMediaOptionVisible() {
-        PlaybackAction.setMediaOptions(player(), mBinding.control.action.edition, mBinding.control.action.chapter);
-    }
-
     private MediaMetadata buildMetadata() {
         return VodPlaybackMedia.metadata(mHistory, getEpisode());
     }
@@ -1348,9 +1242,7 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
 
     public void setRotate(boolean rotate) {
         this.rotate = rotate;
-        if (useComposeControls) padComposeControls(fullscreen && !rotate);
-        else if (fullscreen && !rotate) setPadding(mBinding.control.getRoot());
-        else noPadding(mBinding.control.getRoot());
+        padComposeControls(fullscreen && !rotate);
         updatePlayInfo();
     }
 
@@ -1383,13 +1275,13 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (!player().isPlaying()) return;
         mBinding.widget.speed.setVisibility(View.VISIBLE);
         mBinding.widget.speed.startAnimation(ResUtil.getAnim(R.anim.forward));
-        PlaybackAction.setSpeed(player(), mBinding.control.action.speed, PlayerSetting.getSpeed());
+        PlaybackAction.setSpeed(player(), PlayerSetting.getSpeed());
     }
 
     @Override
     public void onSpeedEnd() {
         mBinding.widget.speed.clearAnimation();
-        PlaybackAction.setSpeed(player(), mBinding.control.action.speed, mHistory.getSpeed());
+        PlaybackAction.setSpeed(player(), mHistory.getSpeed());
     }
 
     @Override
@@ -1712,12 +1604,13 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
     }
 
     private void syncComposeChrome(boolean visible) {
-        if (!useComposeControls || mSession == null) return;
+        if (mSession == null) return;
         mSession.updatePlaybackChrome(visible, isLock(), readPlaying(), readPositionMs(), readDurationMs(), readSpeed(), isFullscreen());
+        pushComposeControlVisibility();
     }
 
     private void pushPlaybackProgress(long position, long duration) {
-        if (!useComposeControls || mSession == null) return;
+        if (mSession == null) return;
         long safePosition = position < 0 ? 0 : position;
         long safeDuration = duration < 0 || duration == C.TIME_UNSET ? 0 : duration;
         mSession.updatePlaybackProgress(safePosition, safeDuration, readPlaying(), readSpeed());
@@ -1759,8 +1652,6 @@ public class VideoActivity extends PlaybackActivity implements Clock.Callback, C
         if (duration < 0 || duration == C.TIME_UNSET) duration = 0;
         String current = Util.timeMs(position);
         String total = Util.timeMs(duration);
-        mBinding.control.position.setText(current);
-        mBinding.control.duration.setText(total);
         mBinding.widget.length.setText(current + " / " + total);
         pushPlaybackProgress(position, duration);
     }

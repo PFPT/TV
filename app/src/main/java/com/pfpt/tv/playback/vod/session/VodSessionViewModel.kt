@@ -56,7 +56,36 @@ class VodSessionViewModel : ViewModel() {
             durationMs = current.durationMs,
             speed = current.speed,
             fullscreen = current.fullscreen,
+            danmakuOn = current.danmakuOn,
+            showDanmaku = current.showDanmaku,
+            showCast = current.showCast,
+            showPip = current.showPip,
+            showRotate = current.showRotate,
         )
+    }
+
+    fun updateDanmakuChrome(show: Boolean, on: Boolean) {
+        _uiState.update {
+            it.copy(showDanmaku = show, danmakuOn = on)
+        }
+    }
+
+    fun updateControlVisibility(
+        showCast: Boolean,
+        showPip: Boolean,
+        showRotate: Boolean,
+        showDanmaku: Boolean,
+        danmakuOn: Boolean,
+    ) {
+        _uiState.update {
+            it.copy(
+                showCast = showCast,
+                showPip = showPip,
+                showRotate = showRotate,
+                showDanmaku = showDanmaku,
+                danmakuOn = danmakuOn,
+            )
+        }
     }
 
     fun updatePlaybackChrome(

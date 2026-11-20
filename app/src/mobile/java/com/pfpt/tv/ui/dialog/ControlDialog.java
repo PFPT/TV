@@ -9,15 +9,16 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
+import androidx.media3.common.C;
 import androidx.viewbinding.ViewBinding;
 
 import com.pfpt.tv.App;
 import com.pfpt.tv.R;
-import com.pfpt.tv.bean.History;
 import com.pfpt.tv.bean.Parse;
-import com.pfpt.tv.databinding.ActivityVideoBinding;
 import com.pfpt.tv.databinding.DialogControlBinding;
+import com.pfpt.tv.playback.PlaybackAction;
 import com.pfpt.tv.player.PlayerManager;
+import com.pfpt.tv.setting.DanmakuSetting;
 import com.pfpt.tv.ui.adapter.ParseAdapter;
 import com.pfpt.tv.ui.custom.SpaceItemDecoration;
 import com.pfpt.tv.utils.ResUtil;
@@ -31,10 +32,8 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
 
     private final String[] scale;
     private DialogControlBinding binding;
-    private ActivityVideoBinding parent;
     private List<TextView> scales;
     private PlayerManager player;
-    private History history;
     private boolean parse;
 
     public ControlDialog() {
@@ -43,16 +42,6 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
 
     public static ControlDialog create() {
         return new ControlDialog();
-    }
-
-    public ControlDialog parent(ActivityVideoBinding parent) {
-        this.parent = parent;
-        return this;
-    }
-
-    public ControlDialog history(History history) {
-        this.history = history;
-        return this;
     }
 
     public ControlDialog parse(boolean parse) {
@@ -80,10 +69,10 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
 
     @Override
     protected void initView() {
-        binding.decode.setText(parent.control.action.decode.getText());
-        binding.ending.setText(parent.control.action.ending.getText());
-        binding.opening.setText(parent.control.action.opening.getText());
-        binding.repeat.setSelected(parent.control.action.repeat.isSelected());
+        binding.decode.setText(player.getDecodeText());
+        binding.ending.setText(listener().endingLabel());
+        binding.opening.setText(listener().openingLabel());
+        binding.repeat.setSelected(player.isRepeatOne());
         binding.timer.setSelected(Timer.get().isRunning());
         setMediaOptionVisible();
         setTrackVisible();
@@ -97,20 +86,19 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         binding.timer.setOnClickListener(this::onTimer);
         binding.speed.addOnChangeListener(this::setSpeed);
         for (TextView view : scales) view.setOnClickListener(this::setScale);
-        binding.text.setOnClickListener(v -> dismiss(parent.control.action.text));
-        binding.audio.setOnClickListener(v -> dismiss(parent.control.action.audio));
-        binding.video.setOnClickListener(v -> dismiss(parent.control.action.video));
-        binding.player.setOnClickListener(v -> dismiss(parent.control.action.player));
-        binding.danmaku.setOnClickListener(v -> dismiss(parent.control.action.danmaku));
-        binding.edition.setOnClickListener(v -> dismiss(parent.control.action.edition));
-        binding.chapter.setOnClickListener(v -> dismiss(parent.control.action.chapter));
-        binding.repeat.setOnClickListener(v -> active(binding.repeat, parent.control.action.repeat));
-        binding.decode.setOnClickListener(v -> click(binding.decode, parent.control.action.decode));
-        binding.ending.setOnClickListener(v -> click(binding.ending, parent.control.action.ending));
-        binding.opening.setOnClickListener(v -> click(binding.opening, parent.control.action.opening));
-        binding.player.setOnLongClickListener(v -> longClick(binding.player, parent.control.action.player));
-        binding.ending.setOnLongClickListener(v -> longClick(binding.ending, parent.control.action.ending));
-        binding.opening.setOnLongClickListener(v -> longClick(binding.opening, parent.control.action.opening));
+        binding.text.setOnClickListener(v -> runDismiss(() -> listener().onTrack(C.TRACK_TYPE_TEXT)));
+        binding.audio.setOnClickListener(v -> runDismiss(() -> listener().onTrack(C.TRACK_TYPE_AUDIO)));
+        binding.video.setOnClickListener(v -> runDismiss(() -> listener().onTrack(C.TRACK_TYPE_VIDEO)));
+        binding.player.setOnClickListener(v -> runDismiss(() -> listener().onChoose()));
+        binding.danmaku.setOnClickListener(v -> runDismiss(() -> listener().onDanmaku()));
+        binding.edition.setOnClickListener(v -> runDismiss(() -> listener().onEdition()));
+        binding.chapter.setOnClickListener(v -> runDismiss(() -> listener().onChapter()));
+        binding.repeat.setOnClickListener(v -> onRepeat());
+        binding.decode.setOnClickListener(v -> onDecode());
+        binding.ending.setOnClickListener(v -> onEnding());
+        binding.opening.setOnClickListener(v -> onOpening());
+        binding.ending.setOnLongClickListener(v -> onEndingReset());
+        binding.opening.setOnLongClickListener(v -> onOpeningReset());
     }
 
     private void onTimer(View view) {
@@ -119,14 +107,14 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
     }
 
     private void setSpeed(@NonNull Slider slider, float value, boolean fromUser) {
-        parent.control.action.speed.setText(player.setSpeed(value));
-        if (history != null) history.setSpeed(player.getSpeed());
+        listener().onSpeedChanged(value);
     }
 
     private void setScaleText() {
+        int current = listener().getScale();
         for (int i = 0; i < scales.size(); i++) {
             scales.get(i).setText(scale[i]);
-            scales.get(i).setSelected(scales.get(i).getText().equals(parent.control.action.scale.getText()));
+            scales.get(i).setSelected(i == current);
         }
     }
 
@@ -140,36 +128,52 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
 
     private void setScale(View view) {
         for (TextView textView : scales) textView.setSelected(false);
-        ((Listener) requireActivity()).onScale(Integer.parseInt(view.getTag().toString()));
+        listener().onScale(Integer.parseInt(view.getTag().toString()));
         view.setSelected(true);
     }
 
-    private void active(View view, TextView target) {
-        target.performClick();
-        view.setSelected(target.isSelected());
+    private void onRepeat() {
+        listener().onRepeat();
+        binding.repeat.setSelected(player.isRepeatOne());
     }
 
-    private void click(TextView view, TextView target) {
-        target.performClick();
-        view.setText(target.getText());
+    private void onDecode() {
+        listener().onDecode();
+        binding.decode.setText(player.getDecodeText());
     }
 
-    private boolean longClick(TextView view, TextView target) {
-        target.performLongClick();
-        view.setText(target.getText());
+    private void onEnding() {
+        listener().onEnding();
+        binding.ending.setText(listener().endingLabel());
+    }
+
+    private void onOpening() {
+        listener().onOpening();
+        binding.opening.setText(listener().openingLabel());
+    }
+
+    private boolean onEndingReset() {
+        listener().onEndingReset();
+        binding.ending.setText(listener().endingLabel());
         return true;
     }
 
-    private void dismiss(View view) {
-        App.post(view::performClick, 200);
+    private boolean onOpeningReset() {
+        listener().onOpeningReset();
+        binding.opening.setText(listener().openingLabel());
+        return true;
+    }
+
+    private void runDismiss(Runnable action) {
+        App.post(action, 200);
         dismiss();
     }
 
     public void setPlayer() {
         binding.speed.setValue(Math.max(player.getSpeed(), 0.5f));
-        binding.player.setText(parent.control.action.player.getText());
-        binding.decode.setVisibility(parent.control.action.decode.getVisibility());
-        binding.danmaku.setVisibility(parent.control.action.danmaku.getVisibility());
+        binding.player.setText(PlaybackAction.getEngineText(player));
+        binding.decode.setVisibility(View.VISIBLE);
+        binding.danmaku.setVisibility(DanmakuSetting.isLoad() ? View.VISIBLE : View.GONE);
     }
 
     public void setParseVisible(boolean visible) {
@@ -178,20 +182,21 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
     }
 
     public void setTrackVisible() {
-        binding.text.setVisibility(parent.control.action.text.getVisibility());
-        binding.audio.setVisibility(parent.control.action.audio.getVisibility());
-        binding.video.setVisibility(parent.control.action.video.getVisibility());
+        PlaybackAction.setTracks(player, binding.text, binding.audio, binding.video);
         binding.track.setVisibility(binding.text.getVisibility() == View.GONE && binding.audio.getVisibility() == View.GONE && binding.video.getVisibility() == View.GONE ? View.GONE : View.VISIBLE);
     }
 
     public void setMediaOptionVisible() {
-        binding.edition.setVisibility(parent.control.action.edition.getVisibility());
-        binding.chapter.setVisibility(parent.control.action.chapter.getVisibility());
+        PlaybackAction.setMediaOptions(player, binding.edition, binding.chapter);
+    }
+
+    private Listener listener() {
+        return (Listener) requireActivity();
     }
 
     @Override
     public void onItemClick(Parse item) {
-        ((Listener) requireActivity()).onParse(item);
+        listener().onParse(item);
         binding.parse.getAdapter().notifyItemRangeChanged(0, binding.parse.getAdapter().getItemCount());
     }
 
@@ -200,5 +205,35 @@ public class ControlDialog extends BaseBottomSheetDialog implements ParseAdapter
         void onScale(int tag);
 
         void onParse(Parse item);
+
+        int getScale();
+
+        void onTrack(int type);
+
+        void onEdition();
+
+        void onChapter();
+
+        void onDanmaku();
+
+        void onChoose();
+
+        void onRepeat();
+
+        void onDecode();
+
+        void onEnding();
+
+        void onOpening();
+
+        boolean onEndingReset();
+
+        boolean onOpeningReset();
+
+        void onSpeedChanged(float speed);
+
+        String openingLabel();
+
+        String endingLabel();
     }
 }

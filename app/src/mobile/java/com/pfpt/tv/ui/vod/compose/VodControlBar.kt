@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,8 @@ fun VodControlTopBar(
     onBack: () -> Unit,
     onKeep: () -> Unit,
     onMore: () -> Unit,
+    onCast: () -> Unit,
+    onDanmaku: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -57,6 +60,15 @@ fun VodControlTopBar(
                 fontSize = 12.sp,
             )
         }
+        if (state.showCast) {
+            ControlIcon(R.drawable.ic_control_cast, onCast)
+        }
+        if (state.showDanmaku) {
+            ControlIcon(
+                if (state.danmakuOn) R.drawable.ic_control_danmaku_on else R.drawable.ic_control_danmaku_off,
+                onDanmaku,
+            )
+        }
         if (!state.fullscreen) {
             ControlIcon(
                 if (state.kept) R.drawable.ic_control_keep_on else R.drawable.ic_control_keep_off,
@@ -64,7 +76,7 @@ fun VodControlTopBar(
             )
         }
         TextButton(onClick = onMore) {
-            Text(text = "更多", color = Color.White)
+            Text(text = stringResource(R.string.control_more), color = Color.White)
         }
     }
 }
@@ -112,6 +124,8 @@ fun VodControlBottomBar(
     onSeek: (Long) -> Unit,
     onScrub: (Boolean) -> Unit,
     onFullscreen: () -> Unit,
+    onPip: () -> Unit,
+    onRotate: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val duration = state.durationMs.coerceAtLeast(0L)
@@ -148,6 +162,12 @@ fun VodControlBottomBar(
         Text(text = Util.timeMs(duration), color = Color.White, fontSize = 12.sp)
         if (!state.fullscreen) {
             ControlIcon(R.drawable.ic_control_fullscreen, onFullscreen, 36.dp)
+        }
+        if (state.showPip) {
+            ControlIcon(R.drawable.ic_control_pip, onPip, 36.dp)
+        }
+        if (state.showRotate) {
+            ControlIcon(R.drawable.ic_control_rotate, onRotate, 36.dp)
         }
     }
 }

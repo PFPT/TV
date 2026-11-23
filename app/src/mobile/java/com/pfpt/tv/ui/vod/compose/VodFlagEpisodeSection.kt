@@ -3,7 +3,6 @@ package com.pfpt.tv.ui.vod.compose
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -21,32 +20,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.pfpt.tv.playback.vod.session.VodEpisodeItem
-import com.pfpt.tv.playback.vod.session.VodFlagItem
-
-@Composable
-fun VodFlagEpisodeSection(
-    flags: List<VodFlagItem>,
-    episodes: List<VodEpisodeItem>,
-    onFlagClick: (Int) -> Unit,
-    onEpisodeClick: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-    between: @Composable () -> Unit = {},
-) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        VodChipRow(
-            labels = flags.map { it.name },
-            selectedIndex = flags.indexOfFirst { it.selected },
-            onClick = onFlagClick,
-        )
-        between()
-        VodChipRow(
-            labels = episodes.map { it.name },
-            selectedIndex = episodes.indexOfFirst { it.selected },
-            onClick = onEpisodeClick,
-        )
-    }
-}
 
 @Composable
 internal fun VodChipRow(

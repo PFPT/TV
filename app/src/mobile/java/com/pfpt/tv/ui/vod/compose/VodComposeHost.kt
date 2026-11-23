@@ -8,7 +8,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
@@ -72,6 +76,10 @@ fun ComposeView.setVodScreen(
     onReverseClick: Runnable,
     onMoreClick: Runnable,
     onCopyContent: Runnable,
+    onFlagClick: VodIndexClick,
+    onQualityClick: VodIndexClick,
+    onEpisodeClick: VodIndexClick,
+    onQuickClick: VodIndexClick,
 ) {
     setContent {
         val state by session.uiState.collectAsStateWithLifecycle()
@@ -86,6 +94,60 @@ fun ComposeView.setVodScreen(
             onReverseClick = onReverseClick::run,
             onMoreClick = onMoreClick::run,
             onCopyContent = onCopyContent::run,
+            onFlagClick = onFlagClick::onClick,
+            onQualityClick = onQualityClick::onClick,
+            onEpisodeClick = onEpisodeClick::onClick,
+            onQuickClick = onQuickClick::onClick,
+        )
+    }
+}
+
+fun ComposeView.setVodDetailHeader(
+    session: VodSessionViewModel,
+    onKeepClick: Runnable,
+    onTitleClick: Runnable,
+    onTitleLongClick: Runnable,
+    onSiteClick: Runnable,
+    onRemarkClick: Runnable,
+    onDownloadClick: Runnable,
+    onReverseClick: Runnable,
+    onMoreClick: Runnable,
+    onCopyContent: Runnable,
+) {
+    setContent {
+        val state by session.uiState.collectAsStateWithLifecycle()
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+            VodDetailHeader(
+                state = state,
+                onKeepClick = onKeepClick::run,
+                onTitleClick = onTitleClick::run,
+                onTitleLongClick = onTitleLongClick::run,
+                onSiteClick = onSiteClick::run,
+                onRemarkClick = onRemarkClick::run,
+                onDownloadClick = onDownloadClick::run,
+                onReverseClick = onReverseClick::run,
+                onMoreClick = onMoreClick::run,
+                onCopyContent = onCopyContent::run,
+            )
+        }
+    }
+}
+
+fun ComposeView.setVodDetailCatalog(
+    session: VodSessionViewModel,
+    onFlagClick: VodIndexClick,
+    onQualityClick: VodIndexClick,
+    onEpisodeClick: VodIndexClick,
+    onQuickClick: VodIndexClick,
+) {
+    setContent {
+        val state by session.uiState.collectAsStateWithLifecycle()
+        VodDetailCatalog(
+            state = state,
+            onFlagClick = onFlagClick::onClick,
+            onQualityClick = onQualityClick::onClick,
+            onEpisodeClick = onEpisodeClick::onClick,
+            onQuickClick = onQuickClick::onClick,
         )
     }
 }
@@ -211,57 +273,3 @@ fun ComposeView.setVodGestureLayer(
     }
 }
 
-fun ComposeView.setVodFlags(
-    session: VodSessionViewModel,
-    onFlagClick: VodIndexClick,
-) {
-    setContent {
-        val state by session.uiState.collectAsStateWithLifecycle()
-        VodChipRow(
-            labels = state.flags.map { it.name },
-            selectedIndex = state.flags.indexOfFirst { it.selected },
-            onClick = onFlagClick::onClick,
-        )
-    }
-}
-
-fun ComposeView.setVodQualities(
-    session: VodSessionViewModel,
-    onQualityClick: VodIndexClick,
-) {
-    setContent {
-        val state by session.uiState.collectAsStateWithLifecycle()
-        VodQualityRow(
-            qualities = state.qualities,
-            qualityIndex = state.qualityIndex,
-            onQualityClick = onQualityClick::onClick,
-        )
-    }
-}
-
-fun ComposeView.setVodEpisodes(
-    session: VodSessionViewModel,
-    onEpisodeClick: VodIndexClick,
-) {
-    setContent {
-        val state by session.uiState.collectAsStateWithLifecycle()
-        VodChipRow(
-            labels = state.episodes.map { it.name },
-            selectedIndex = state.episodes.indexOfFirst { it.selected },
-            onClick = onEpisodeClick::onClick,
-        )
-    }
-}
-
-fun ComposeView.setVodQuick(
-    session: VodSessionViewModel,
-    onQuickClick: VodIndexClick,
-) {
-    setContent {
-        val state by session.uiState.collectAsStateWithLifecycle()
-        VodQuickGrid(
-            items = state.quick,
-            onClick = onQuickClick::onClick,
-        )
-    }
-}

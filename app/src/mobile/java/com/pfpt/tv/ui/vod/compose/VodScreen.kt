@@ -17,6 +17,10 @@ fun VodScreen(
     onReverseClick: () -> Unit = {},
     onMoreClick: () -> Unit = {},
     onCopyContent: () -> Unit = {},
+    onFlagClick: (Int) -> Unit = {},
+    onQualityClick: (Int) -> Unit = {},
+    onEpisodeClick: (Int) -> Unit = {},
+    onQuickClick: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -31,6 +35,13 @@ fun VodScreen(
             onReverseClick = onReverseClick,
             onMoreClick = onMoreClick,
             onCopyContent = onCopyContent,
+        )
+        VodDetailCatalog(
+            state = state,
+            onFlagClick = onFlagClick,
+            onQualityClick = onQualityClick,
+            onEpisodeClick = onEpisodeClick,
+            onQuickClick = onQuickClick,
         )
     }
 }

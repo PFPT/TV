@@ -439,11 +439,12 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         mViewModel = new ViewModelProvider(this).get(VideoViewModel.class);
         mSession = new ViewModelProvider(this).get(VodSessionViewModel.class);
         mSession.bind(mViewModel.getPlaybackState());
-        VodComposeHostKt.setVodScreen(mBinding.detailCompose, mSession, this::onKeep, this::onName, () -> onChange(), this::onComposeSiteClick, this::onComposeRemarkClick, this::onDownload, this::onReverse, this::onMore, this::onCopy);
-        VodComposeHostKt.setVodFlags(mBinding.flagCompose, mSession, this::onComposeFlag);
-        VodComposeHostKt.setVodQualities(mBinding.qualityCompose, mSession, this::onComposeQuality);
-        VodComposeHostKt.setVodEpisodes(mBinding.episodeCompose, mSession, this::onComposeEpisode);
-        VodComposeHostKt.setVodQuick(mBinding.quickCompose, mSession, this::onComposeQuick);
+        if (mBinding.catalogCompose != null) {
+            VodComposeHostKt.setVodDetailHeader(mBinding.detailCompose, mSession, this::onKeep, this::onName, () -> onChange(), this::onComposeSiteClick, this::onComposeRemarkClick, this::onDownload, this::onReverse, this::onMore, this::onCopy);
+            VodComposeHostKt.setVodDetailCatalog(mBinding.catalogCompose, mSession, this::onComposeFlag, this::onComposeQuality, this::onComposeEpisode, this::onComposeQuick);
+        } else {
+            VodComposeHostKt.setVodScreen(mBinding.detailCompose, mSession, this::onKeep, this::onName, () -> onChange(), this::onComposeSiteClick, this::onComposeRemarkClick, this::onDownload, this::onReverse, this::onMore, this::onCopy, this::onComposeFlag, this::onComposeQuality, this::onComposeEpisode, this::onComposeQuick);
+        }
         VodSheetsKt.setVodSheetHost(mBinding.sheetCompose, mSession, sheetController, this::onSheetPlayEpisode, this::onSheetDownloadEpisode, this::onSheetDownloadList, this::onSheetDownloadConfirm, this::onSheetInfoShare, this::onSheetControlMore);
         VodComposeHostKt.setVodControlBars(mBinding.controlTopCompose, mBinding.controlCenterCompose, mBinding.controlLockCompose, mBinding.controlBottomCompose, mSession, this::onBack, this::checkPlay, this::checkNext, this::checkPrev, this::onLock, this::onKeep, this::enterFullscreen, this::onSetting, this::onComposeSeek, this::onComposeScrub, this::onCast, this::onPip, this::onRotate, this::onDanmakuShow);
         VodComposeHostKt.setVodGestureLayer(mBinding.gestureCompose, mSession, this::onComposeBrightness, this::onComposeVolume, this::onComposeSeekPreview, this::onComposeSeekEnd, this::onSingleTap, this::onDoubleTap, this::onSpeedUp, this::onSpeedEnd, this::onComposeFlingUp, this::onComposeFlingDown, this::onComposeScale, this::onComposeTouchEnd);
@@ -592,7 +593,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
 
     @Override
     public void setQualityVisible(boolean visible) {
-        mBinding.qualityText.setVisibility(visible ? View.VISIBLE : View.GONE);
         syncCatalog();
     }
 

@@ -15,6 +15,8 @@ import com.pfpt.tv.R;
 import com.pfpt.tv.api.config.VodConfig;
 import com.pfpt.tv.db.AppDatabase;
 import com.pfpt.tv.impl.Diffable;
+import com.pfpt.tv.setting.PlayerSetting;
+import com.pfpt.tv.utils.Task;
 import com.google.gson.annotations.SerializedName;
 import com.google.gson.reflect.TypeToken;
 
@@ -104,7 +106,7 @@ public class History implements Diffable<History> {
     }
 
     public static void delete(int cid) {
-        AppDatabase.get().getHistoryDao().delete(cid);
+        Task.execute(() -> AppDatabase.get().getHistoryDao().delete(cid));
     }
 
     public static void sync(List<History> targets) {
@@ -243,6 +245,15 @@ public class History implements Diffable<History> {
         this.scale = scale;
     }
 
+    public static String key(String siteKey, String vodId) {
+        return siteKey + AppDatabase.SYMBOL + vodId + AppDatabase.SYMBOL + VodConfig.getCid();
+    }
+
+    public static int resolveScale(@Nullable History history) {
+        if (history != null && history.getScale() != -1) return history.getScale();
+        return PlayerSetting.getScale();
+    }
+
     public int getCid() {
         return cid;
     }
@@ -290,7 +301,7 @@ public class History implements Diffable<History> {
 
     private boolean shouldMerge(History item, boolean force) {
         if (!force && getKey().equals(item.getKey())) return false;
-        if (getDuration() <= 0 || item.getDuration() <= 0) return true;
+        if (getDuration() <= 0 || item.getDuration() <= 0) return false;
         return Math.abs(getDuration() - item.getDuration()) <= TimeUnit.MINUTES.toMillis(10);
     }
 
@@ -302,7 +313,7 @@ public class History implements Diffable<History> {
     }
 
     public boolean canSave() {
-        return getPosition() > 0 && getDuration() > 0;
+        return getPosition() > 0;
     }
 
     public boolean canSync() {
@@ -339,8 +350,12 @@ public class History implements Diffable<History> {
     }
 
     public History delete() {
-        AppDatabase.get().getHistoryDao().delete(VodConfig.getCid(), getKey());
-        AppDatabase.get().getTrackDao().delete(getKey());
+        String key = getKey();
+        int cid = VodConfig.getCid();
+        Task.execute(() -> {
+            AppDatabase.get().getHistoryDao().delete(cid, key);
+            AppDatabase.get().getTrackDao().delete(key);
+        });
         return this;
     }
 

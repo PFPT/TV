@@ -70,13 +70,17 @@ public class Download {
             byte[] buffer = new byte[16384];
             int readBytes;
             long totalBytes = 0;
+            int lastProgress = -1;
             while ((readBytes = input.read(buffer)) != -1) {
                 if (Thread.interrupted()) return;
                 totalBytes += readBytes;
                 os.write(buffer, 0, readBytes);
-                if (length <= 0) continue;
+                if (length <= 0 || callback == null) continue;
                 int progress = (int) (totalBytes / length * 100.0);
-                if (callback != null) App.post(() -> callback.progress(progress));
+                if (progress == lastProgress) continue;
+                lastProgress = progress;
+                int value = progress;
+                App.post(() -> callback.progress(value));
             }
         }
     }

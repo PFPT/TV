@@ -29,6 +29,10 @@ public final class PlaybackAction {
         return applySpeedText(player, speed, player.subSpeed(value));
     }
 
+    public static float setSpeed(PlayerManager player, float value) {
+        return setSpeed(player, null, value);
+    }
+
     public static float setSpeed(PlayerManager player, TextView speed, float value) {
         return applySpeedText(player, speed, player.setSpeed(value));
     }

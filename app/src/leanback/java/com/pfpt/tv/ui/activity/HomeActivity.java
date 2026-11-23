@@ -66,6 +66,7 @@ import com.pfpt.tv.utils.KeyUtil;
 import com.pfpt.tv.utils.Notify;
 import com.pfpt.tv.utils.PermissionUtil;
 import com.pfpt.tv.utils.ResUtil;
+import com.pfpt.tv.utils.Task;
 import com.pfpt.tv.utils.UrlUtil;
 import com.github.catvod.net.OkHttp;
 import com.google.common.collect.Lists;
@@ -281,7 +282,16 @@ public class HomeActivity extends BaseActivity implements CustomTitleView.Listen
     }
 
     private void getHistory(boolean renew) {
-        List<History> items = History.get();
+        Task.execute(() -> {
+            List<History> items = History.get();
+            App.post(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                applyHistory(items, renew);
+            });
+        });
+    }
+
+    private void applyHistory(List<History> items, boolean renew) {
         int historyIndex = getHistoryIndex();
         int recommendIndex = getRecommendIndex();
         boolean exist = recommendIndex - historyIndex == 2;

@@ -15,7 +15,6 @@ import com.pfpt.tv.bean.History;
 import com.pfpt.tv.bean.Result;
 import com.pfpt.tv.bean.Site;
 import com.pfpt.tv.bean.Vod;
-import com.pfpt.tv.db.AppDatabase;
 import com.pfpt.tv.setting.Setting;
 import com.pfpt.tv.utils.Task;
 import com.github.catvod.utils.Trans;
@@ -348,7 +347,7 @@ class VodBrowse {
 
     @NonNull
     private static String historyKey(@NonNull String siteKey, @NonNull String vodId) {
-        return siteKey + AppDatabase.SYMBOL + vodId + AppDatabase.SYMBOL + VodConfig.getCid();
+        return History.key(siteKey, vodId);
     }
 
     @NonNull

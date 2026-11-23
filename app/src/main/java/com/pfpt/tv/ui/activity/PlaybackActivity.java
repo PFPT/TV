@@ -147,7 +147,9 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     }
 
     protected void setSeekNextFocusDown(int id) {
-        View timeBar = getSeekView().findViewById(androidx.media3.ui.R.id.exo_progress);
+        PlayerSeekView seekView = getSeekView();
+        if (seekView == null) return;
+        View timeBar = seekView.findViewById(androidx.media3.ui.R.id.exo_progress);
         if (timeBar != null) timeBar.setNextFocusDownId(id);
     }
 
@@ -259,7 +261,8 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     private void onControllerConnected() {
         try {
             mController = mControllerFuture.get();
-            getSeekView().setPlayer(mController);
+            PlayerSeekView seekView = getSeekView();
+            if (seekView != null) seekView.setPlayer(mController);
             mController.addListener(this);
             updateKeyIncrement();
         } catch (Exception ignored) {
@@ -267,7 +270,9 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     }
 
     private void addSeekListener() {
-        getSeekView().getTimeBar().addListener(new TimeBar.OnScrubListener() {
+        PlayerSeekView seekView = getSeekView();
+        if (seekView == null) return;
+        seekView.getTimeBar().addListener(new TimeBar.OnScrubListener() {
             @Override
             public void onScrubStart(@NonNull TimeBar timeBar, long position) {
                 PlaybackActivity.this.setScrubbing(true);
@@ -306,7 +311,10 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     private void updateKeyIncrement() {
         long durationMs = mController == null ? C.TIME_UNSET : mController.getDuration();
         long incrementMs = getKeyTimeIncrementMs(durationMs);
-        TimeBar timeBar = getSeekView().getTimeBar();
+        PlayerSeekView seekView = getSeekView();
+        if (seekView == null) return;
+        TimeBar timeBar = seekView.getTimeBar();
+        if (timeBar == null) return;
         timeBar.setKeyTimeIncrement(incrementMs);
     }
 
@@ -404,7 +412,8 @@ public abstract class PlaybackActivity extends BaseActivity implements MediaCont
     private void releaseController() {
         if (mControllerFuture != null) MediaController.releaseFuture(mControllerFuture);
         if (mController != null) mController.removeListener(this);
-        if (mController != null) getSeekView().setPlayer(null);
+        PlayerSeekView seekView = getSeekView();
+        if (mController != null && seekView != null) seekView.setPlayer(null);
         mControllerFuture = null;
         mController = null;
     }

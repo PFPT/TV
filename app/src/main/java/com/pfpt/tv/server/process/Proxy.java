@@ -4,7 +4,6 @@ import com.pfpt.tv.api.loader.BaseLoader;
 import com.pfpt.tv.server.Nano;
 import com.pfpt.tv.server.impl.Process;
 
-import java.io.InputStream;
 import java.util.Map;
 import java.util.Objects;
 
@@ -29,19 +28,22 @@ public class Proxy implements Process {
             Map<String, String> params = session.getParms();
             params.putAll(session.getHeaders());
             params.putAll(files);
-            return createResponse(BaseLoader.get().proxy(params));
+            return createResponse(ProxyResult.parse(BaseLoader.get().proxy(params)));
         } catch (Throwable e) {
             e.printStackTrace();
             return Nano.error(Objects.toString(e.getMessage(), e.toString()));
         }
     }
 
-    private static Response createResponse(Object[] rs) {
-        if (rs == null || rs.length == 0) return Nano.error(INVALID_RESPONSE);
-        if (rs[0] instanceof Response response) return response;
-        if (rs.length < 3) return Nano.error(INVALID_RESPONSE);
-        Response response = NanoHTTPD.newChunkedResponse(toStatus((Integer) rs[0]), (String) rs[1], (InputStream) rs[2]);
-        if (rs.length > 3 && rs[3] != null) for (Map.Entry<String, String> entry : ((Map<String, String>) rs[3]).entrySet()) response.addHeader(entry.getKey(), entry.getValue());
+    private static Response createResponse(ProxyResult result) {
+        if (result == null) return Nano.error(INVALID_RESPONSE);
+        if (result.isDirectResponse()) return result.getResponse();
+        Response response = NanoHTTPD.newChunkedResponse(toStatus(result.getCode()), result.getMime(), result.getStream());
+        if (result.getHeaders() != null) {
+            for (Map.Entry<String, String> entry : result.getHeaders().entrySet()) {
+                response.addHeader(entry.getKey(), entry.getValue());
+            }
+        }
         return response;
     }
 

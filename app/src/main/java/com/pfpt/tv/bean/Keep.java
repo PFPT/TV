@@ -9,6 +9,7 @@ import com.pfpt.tv.App;
 import com.pfpt.tv.api.config.VodConfig;
 import com.pfpt.tv.db.AppDatabase;
 import com.pfpt.tv.impl.Diffable;
+import com.pfpt.tv.utils.Task;
 import com.google.gson.annotations.SerializedName;
 import com.google.gson.reflect.TypeToken;
 
@@ -51,20 +52,40 @@ public class Keep implements Diffable<Keep> {
         return AppDatabase.get().getKeepDao().find(cid, key);
     }
 
+    public static Keep createVod(String key, int cid, String vodName, String vodPic, String siteName) {
+        Keep keep = new Keep();
+        keep.setKey(key);
+        keep.setCid(cid);
+        keep.setVodName(vodName);
+        keep.setVodPic(vodPic);
+        keep.setSiteName(siteName);
+        keep.setCreateTime(System.currentTimeMillis());
+        keep.save();
+        return keep;
+    }
+
+    public static void updateNamePic(String key, String vodName, String vodPic) {
+        Keep keep = find(key);
+        if (keep == null) return;
+        keep.setVodName(vodName);
+        keep.setVodPic(vodPic);
+        keep.save();
+    }
+
     public static boolean exist(String key) {
         return AppDatabase.get().getKeepDao().find(key) != null;
     }
 
     public static void deleteAll() {
-        AppDatabase.get().getKeepDao().delete();
+        Task.execute(() -> AppDatabase.get().getKeepDao().delete());
     }
 
     public static void delete(int cid) {
-        AppDatabase.get().getKeepDao().delete(cid);
+        Task.execute(() -> AppDatabase.get().getKeepDao().delete(cid));
     }
 
     public static void delete(String key) {
-        AppDatabase.get().getKeepDao().delete(key);
+        Task.execute(() -> AppDatabase.get().getKeepDao().delete(key));
     }
 
     public static List<Keep> getVod() {
@@ -152,11 +173,13 @@ public class Keep implements Diffable<Keep> {
     }
 
     public void save() {
-        AppDatabase.get().getKeepDao().insertOrUpdate(this);
+        Task.execute(() -> AppDatabase.get().getKeepDao().insertOrUpdate(this));
     }
 
     public Keep delete() {
-        AppDatabase.get().getKeepDao().delete(getCid(), getKey());
+        int cid = getCid();
+        String key = getKey();
+        Task.execute(() -> AppDatabase.get().getKeepDao().delete(cid, key));
         return this;
     }
 

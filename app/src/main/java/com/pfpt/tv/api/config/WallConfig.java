@@ -4,16 +4,12 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.MediaMetadataRetriever;
 
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.engine.DiskCacheStrategy;
-import com.pfpt.tv.App;
 import com.pfpt.tv.bean.Config;
 import com.pfpt.tv.event.ConfigEvent;
 import com.pfpt.tv.impl.Callback;
 import com.pfpt.tv.setting.Setting;
 import com.pfpt.tv.utils.Download;
 import com.pfpt.tv.utils.FileUtil;
-import com.pfpt.tv.utils.ResUtil;
 import com.pfpt.tv.utils.UrlUtil;
 import com.github.catvod.utils.Path;
 
@@ -99,11 +95,26 @@ public class WallConfig extends BaseConfig {
     }
 
     private void setSnapshot(File file) throws Throwable {
-        Bitmap bitmap = Glide.with(App.get()).asBitmap().frame(0).load(file).override(ResUtil.getScreenWidth(), ResUtil.getScreenHeight()).skipMemoryCache(true).diskCacheStrategy(DiskCacheStrategy.NONE).submit().get();
+        Bitmap bitmap = createSnapshot(file);
+        if (bitmap == null) throw new FileNotFoundException();
         try (FileOutputStream fos = new FileOutputStream(FileUtil.getWallCache())) {
             bitmap.compress(Bitmap.CompressFormat.JPEG, 100, fos);
         } finally {
             bitmap.recycle();
+        }
+    }
+
+    private Bitmap createSnapshot(File file) {
+        if (Setting.getWallType() == 2) return videoFrame(file);
+        return BitmapFactory.decodeFile(file.getAbsolutePath());
+    }
+
+    private Bitmap videoFrame(File file) {
+        try (MediaMetadataRetriever retriever = new MediaMetadataRetriever()) {
+            retriever.setDataSource(file.getAbsolutePath());
+            return retriever.getFrameAtTime(0);
+        } catch (Exception e) {
+            return null;
         }
     }
 

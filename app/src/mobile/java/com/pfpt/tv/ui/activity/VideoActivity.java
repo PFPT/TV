@@ -29,6 +29,8 @@ import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.media3.common.C;
 import androidx.media3.common.Format;
+import androidx.media3.common.MediaChapter;
+import androidx.media3.common.MediaEdition;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.Player;
@@ -75,12 +77,10 @@ import com.pfpt.tv.setting.LiveSetting;
 import com.pfpt.tv.setting.PlayerSetting;
 import com.pfpt.tv.ui.custom.CustomKeyDown;
 import com.pfpt.tv.ui.dialog.CastDialog;
-import com.pfpt.tv.ui.dialog.ChapterDialog;
-import com.pfpt.tv.ui.dialog.DanmakuDialog;
+import com.pfpt.tv.ui.dialog.DanmakuSearchDialog;
+import com.pfpt.tv.ui.dialog.DanmakuSettingDialog;
 import com.pfpt.tv.ui.dialog.DownloadDialog;
-import com.pfpt.tv.ui.dialog.EditionDialog;
 import com.pfpt.tv.ui.dialog.ParseDialog;
-import com.pfpt.tv.ui.dialog.PlayerEngineDialog;
 import com.pfpt.tv.ui.dialog.ReceiveDialog;
 import com.pfpt.tv.ui.dialog.SubtitleDialog;
 import com.pfpt.tv.ui.dialog.OffsetDialog;
@@ -106,6 +106,19 @@ import com.pfpt.tv.ui.vod.compose.VodDownloadConfirm;
 import com.pfpt.tv.ui.vod.compose.VodPlayerScale;
 import com.pfpt.tv.ui.vod.compose.VodSheetController;
 import com.pfpt.tv.ui.vod.compose.VodSheetsKt;
+import com.pfpt.tv.ui.vod.compose.EngineSelection;
+import com.pfpt.tv.ui.vod.compose.VodChapterSheetKt;
+import com.pfpt.tv.ui.vod.compose.VodChapterState;
+import com.pfpt.tv.ui.vod.compose.VodDanmakuEvent;
+import com.pfpt.tv.ui.vod.compose.VodDanmakuIds;
+import com.pfpt.tv.ui.vod.compose.VodDanmakuSheetKt;
+import com.pfpt.tv.ui.vod.compose.VodDanmakuState;
+import com.pfpt.tv.ui.vod.compose.VodEditionSheetKt;
+import com.pfpt.tv.ui.vod.compose.VodEditionState;
+import com.pfpt.tv.ui.vod.compose.VodEngineEvent;
+import com.pfpt.tv.ui.vod.compose.VodEngineIds;
+import com.pfpt.tv.ui.vod.compose.VodEngineSheetKt;
+import com.pfpt.tv.ui.vod.compose.VodEngineState;
 import com.pfpt.tv.ui.vod.compose.VodTimerEvent;
 import com.pfpt.tv.ui.vod.compose.VodTimerIds;
 import com.pfpt.tv.ui.vod.compose.VodTimerState;
@@ -169,6 +182,12 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) return;
         if (player() == null) return;
         player().setSub(Sub.from(FileChooser.getPathFromUri(result.getData().getData())));
+        sheetController.dismiss();
+    });
+    private final ActivityResultLauncher<Intent> danmakuFileLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) return;
+        if (player() == null) return;
+        player().setDanmaku(Danmaku.from(FileChooser.getPathFromUri(result.getData().getData())));
         sheetController.dismiss();
     });
     private final Timer.Callback timerSheetCallback = new Timer.Callback() {
@@ -485,7 +504,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         } else {
             VodComposeHostKt.setVodScreen(mBinding.detailCompose, mSession, this::onKeep, this::onName, () -> onChange(), this::onComposeSiteClick, this::onComposeRemarkClick, this::onDownload, this::onReverse, this::onMore, this::onCopy, this::onComposeFlag, this::onComposeQuality, this::onComposeEpisode, this::onComposeQuick);
         }
-        VodSheetsKt.setVodSheetHost(mBinding.sheetCompose, mSession, sheetController, this::onSheetPlayEpisode, this::onSheetDownloadEpisode, this::onSheetDownloadList, this::onSheetDownloadConfirm, this::onSheetInfoShare, this::onSheetControlMore, this::onSheetControlConfig, this::onTimerSheetEvent, this::dismissTimerSheet, this::onTrackSheetEvent);
+        VodSheetsKt.setVodSheetHost(mBinding.sheetCompose, mSession, sheetController, this::onSheetPlayEpisode, this::onSheetDownloadEpisode, this::onSheetDownloadList, this::onSheetDownloadConfirm, this::onSheetInfoShare, this::onSheetControlMore, this::onSheetControlConfig, this::onTimerSheetEvent, this::dismissTimerSheet, this::onTrackSheetEvent, this::onEditionSheetEvent, this::onChapterSheetEvent, this::onEngineSheetEvent, this::onDanmakuSheetEvent);
         VodComposeHostKt.setVodControlBars(mBinding.controlTopCompose, mBinding.controlCenterCompose, mBinding.controlLockCompose, mBinding.controlBottomCompose, mSession, this::onBack, this::checkPlay, this::checkNext, this::checkPrev, this::onLock, this::onKeep, this::enterFullscreen, this::onSetting, this::onComposeSeek, this::onComposeScrub, this::onCast, this::onPip, this::onRotate, this::onDanmakuShow);
         VodComposeHostKt.setVodGestureLayer(mBinding.gestureCompose, mSession, this::onComposeBrightness, this::onComposeVolume, this::onComposeSeekPreview, this::onComposeSeekEnd, this::onSingleTap, this::onDoubleTap, this::onSpeedUp, this::onSpeedEnd, this::onComposeFlingUp, this::onComposeFlingDown, this::onComposeScale, this::onComposeTouchEnd);
         observeForever(mViewModel.getResult(), mObserveDetail);
@@ -935,18 +954,134 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     public void onEdition() {
-        EditionDialog.create().player(player()).show(this);
+        if (player() == null) return;
         hideControl();
+        ensureSheetHost();
+        sheetController.showEdition(readEditionState());
+    }
+
+    private VodEditionState readEditionState() {
+        List<MediaEdition> items = player().getCurrentMediaEditions();
+        List<String> names = new ArrayList<>();
+        int selected = -1;
+        if (items != null) {
+            for (int i = 0; i < items.size(); i++) {
+                MediaEdition item = items.get(i);
+                names.add(VodEditionSheetKt.editionRowLabel(item.label == null ? "" : item.label, item.durationUs));
+                if (selected < 0 && item.selected) selected = i;
+            }
+        }
+        return new VodEditionState(getString(R.string.dialog_select_edition), names, selected);
+    }
+
+    private void onEditionSheetEvent(int index) {
+        if (player() == null) return;
+        List<MediaEdition> items = player().getCurrentMediaEditions();
+        if (items == null || index < 0 || index >= items.size()) return;
+        player().selectEdition(items.get(index));
     }
 
     public void onChapter() {
-        ChapterDialog.create().player(player()).show(this);
+        if (player() == null) return;
         hideControl();
+        ensureSheetHost();
+        sheetController.showChapter(readChapterState());
+    }
+
+    private VodChapterState readChapterState() {
+        List<MediaChapter> items = player().getCurrentMediaChapters();
+        List<String> names = new ArrayList<>();
+        int selected = -1;
+        if (items != null) {
+            for (int i = 0; i < items.size(); i++) {
+                MediaChapter item = items.get(i);
+                names.add(VodChapterSheetKt.chapterRowLabel(item.label == null ? "" : item.label, item.timeUs));
+                if (selected < 0 && item.selected) selected = i;
+            }
+        }
+        return new VodChapterState(getString(R.string.dialog_select_chapter), names, selected);
+    }
+
+    private void onChapterSheetEvent(int index) {
+        if (player() == null) return;
+        List<MediaChapter> items = player().getCurrentMediaChapters();
+        if (items == null || index < 0 || index >= items.size()) return;
+        player().selectChapter(items.get(index));
     }
 
     public void onDanmaku() {
-        DanmakuDialog.create().player(player()).show(this);
+        if (player() == null) return;
         hideControl();
+        ensureSheetHost();
+        sheetController.showDanmaku(readDanmakuState());
+    }
+
+    private VodDanmakuState readDanmakuState() {
+        List<Danmaku> items = player().getDanmakus();
+        List<String> names = new ArrayList<>();
+        int selected = -1;
+        if (items != null) {
+            for (int i = 0; i < items.size(); i++) {
+                Danmaku item = items.get(i);
+                names.add(item.getName() == null ? "" : item.getName());
+                if (selected < 0 && item.isSelected()) selected = i;
+            }
+        }
+        boolean showSearch = VodDanmakuSheetKt.danmakuShowSearch(player().getMetadata() != null, DanmakuSetting.getEffectiveApiUrl());
+        return new VodDanmakuState(getString(R.string.danmaku_select), names, selected, showSearch);
+    }
+
+    private void onDanmakuSheetEvent(VodDanmakuEvent event) {
+        if (player() == null) return;
+        int id = event.getId();
+        if (id == VodDanmakuIds.CHOOSE) {
+            player().pause();
+            FileChooser.from(danmakuFileLauncher).show("text/*");
+            return;
+        }
+        if (id == VodDanmakuIds.SEARCH) {
+            DanmakuSearchDialog.create().player(player()).show(this);
+            return;
+        }
+        if (id == VodDanmakuIds.SETTING) {
+            DanmakuSettingDialog.create().player(player()).show(this);
+            return;
+        }
+        if (id != VodDanmakuIds.ITEM) return;
+        List<Danmaku> items = player().getDanmakus();
+        int index = event.getIndex();
+        if (items == null || index < 0 || index >= items.size()) return;
+        Danmaku item = items.get(index);
+        player().setDanmaku(item.isSelected() ? Danmaku.empty() : item);
+    }
+
+    public void onChoose() {
+        if (player() == null) return;
+        hideControl();
+        ensureSheetHost();
+        sheetController.showEngine(readEngineState());
+    }
+
+    private VodEngineState readEngineState() {
+        EngineSelection selection = VodEngineSheetKt.engineSelection(PlaybackAction.getEngine(player()));
+        return new VodEngineState(getString(R.string.player_engine), selection.getExo(), selection.getMpv(), isDebugViewVisible());
+    }
+
+    private void onEngineSheetEvent(VodEngineEvent event) {
+        if (player() == null) return;
+        int id = event.getId();
+        if (id == VodEngineIds.DEBUG) {
+            toggleDebugView();
+            return;
+        }
+        if (id == VodEngineIds.OTHER) {
+            chooseOtherPlayer(playTitle);
+            return;
+        }
+        int engine = id == VodEngineIds.EXO ? PlayerSetting.ENGINE_EXO : id == VodEngineIds.MPV ? PlayerSetting.ENGINE_MPV : -1;
+        if (engine != PlayerSetting.ENGINE_EXO && engine != PlayerSetting.ENGINE_MPV) return;
+        if (engine != PlaybackAction.getEngine(player())) hideDebugView();
+        player().setEngine(engine);
     }
 
     private void onDanmakuShow() {
@@ -1021,11 +1156,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     public String endingLabel() {
         if (mHistory == null || mHistory.getEnding() <= 0) return getString(R.string.play_ed);
         return Util.timeMs(mHistory.getEnding());
-    }
-
-    public void onChoose() {
-        PlayerEngineDialog.show(this, null, player(), playTitle);
-        hideControl();
     }
 
     private void onSwipeRefresh() {

@@ -73,6 +73,10 @@ enum class VodSheetKind {
     ControlConfig,
     Timer,
     Track,
+    Edition,
+    Chapter,
+    Engine,
+    Danmaku,
 }
 
 data class VodDownloadConfirm(
@@ -180,6 +184,14 @@ class VodSheetController {
         ),
     )
         private set
+    var edition by mutableStateOf(VodEditionState(title = "", names = emptyList(), selected = -1))
+        private set
+    var chapter by mutableStateOf(VodChapterState(title = "", names = emptyList(), selected = -1))
+        private set
+    var engine by mutableStateOf(VodEngineState(title = "", exoSelected = false, mpvSelected = false, debugSelected = false))
+        private set
+    var danmaku by mutableStateOf(VodDanmakuState(title = "", names = emptyList(), selected = -1, showSearch = false))
+        private set
 
     fun showEpisodes(download: Boolean) {
         this.download = null
@@ -249,6 +261,34 @@ class VodSheetController {
         kind = VodSheetKind.Track
     }
 
+    fun showEdition(state: VodEditionState) {
+        download = null
+        info = null
+        edition = state
+        kind = VodSheetKind.Edition
+    }
+
+    fun showChapter(state: VodChapterState) {
+        download = null
+        info = null
+        chapter = state
+        kind = VodSheetKind.Chapter
+    }
+
+    fun showEngine(state: VodEngineState) {
+        download = null
+        info = null
+        engine = state
+        kind = VodSheetKind.Engine
+    }
+
+    fun showDanmaku(state: VodDanmakuState) {
+        download = null
+        info = null
+        danmaku = state
+        kind = VodSheetKind.Danmaku
+    }
+
     fun dismiss() {
         kind = VodSheetKind.None
         download = null
@@ -282,6 +322,10 @@ fun ComposeView.setVodSheetHost(
     onTimer: VodTimerAction,
     onTimerDismiss: Runnable,
     onTrack: VodTrackAction,
+    onEdition: VodEditionAction,
+    onChapter: VodChapterAction,
+    onEngine: VodEngineAction,
+    onDanmaku: VodDanmakuAction,
 ) {
     setContent {
         val ui by session.uiState.collectAsStateWithLifecycle()
@@ -353,6 +397,26 @@ fun ComposeView.setVodSheetHost(
             VodSheetKind.Track -> TrackSheet(
                 state = controller.track,
                 onEvent = { onTrack.onEvent(it) },
+                onDismiss = controller::dismiss,
+            )
+            VodSheetKind.Edition -> EditionSheet(
+                state = controller.edition,
+                onIndex = { onEdition.onIndex(it) },
+                onDismiss = controller::dismiss,
+            )
+            VodSheetKind.Chapter -> ChapterSheet(
+                state = controller.chapter,
+                onIndex = { onChapter.onIndex(it) },
+                onDismiss = controller::dismiss,
+            )
+            VodSheetKind.Engine -> EngineSheet(
+                state = controller.engine,
+                onEvent = { onEngine.onEvent(it) },
+                onDismiss = controller::dismiss,
+            )
+            VodSheetKind.Danmaku -> DanmakuSheet(
+                state = controller.danmaku,
+                onEvent = { onDanmaku.onEvent(it) },
                 onDismiss = controller::dismiss,
             )
         }

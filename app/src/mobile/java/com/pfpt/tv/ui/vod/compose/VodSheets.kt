@@ -70,6 +70,7 @@ enum class VodSheetKind {
     DownloadConfirm,
     Info,
     ControlMore,
+    ControlConfig,
 }
 
 data class VodDownloadConfirm(
@@ -140,6 +141,30 @@ class VodSheetController {
         private set
     var controlMore by mutableStateOf(VodControlMoreVisibility())
         private set
+    var controlConfig by mutableStateOf(
+        VodControlConfig(
+            speed = 0.5f,
+            showParse = false,
+            parseNames = emptyList(),
+            parseIndex = -1,
+            scaleLabels = emptyList(),
+            scaleIndex = -1,
+            playerLabel = "",
+            decodeLabel = "",
+            openingLabel = "",
+            endingLabel = "",
+            showEdition = false,
+            showChapter = false,
+            showText = false,
+            showAudio = false,
+            showVideo = false,
+            showTrackTitle = false,
+            showDanmaku = false,
+            repeatOn = false,
+            timerOn = false,
+        ),
+    )
+        private set
 
     fun showEpisodes(download: Boolean) {
         this.download = null
@@ -178,6 +203,18 @@ class VodSheetController {
         kind = VodSheetKind.ControlMore
     }
 
+    fun showControlConfig(config: VodControlConfig) {
+        download = null
+        info = null
+        controlConfig = config
+        kind = VodSheetKind.ControlConfig
+    }
+
+    fun updateControlConfig(config: VodControlConfig) {
+        if (kind != VodSheetKind.ControlConfig) return
+        controlConfig = config
+    }
+
     fun dismiss() {
         kind = VodSheetKind.None
         download = null
@@ -207,6 +244,7 @@ fun ComposeView.setVodSheetHost(
     onDownloadConfirm: VodDownloadSend,
     onInfoShare: VodInfoShare,
     onControlMore: VodControlMoreAction,
+    onControlConfig: VodControlConfigAction,
 ) {
     setContent {
         val ui by session.uiState.collectAsStateWithLifecycle()
@@ -263,6 +301,11 @@ fun ComposeView.setVodSheetHost(
                 onAction = { id ->
                     onControlMore.onAction(id)
                 },
+                onDismiss = controller::dismiss,
+            )
+            VodSheetKind.ControlConfig -> ControlConfigSheet(
+                config = controller.controlConfig,
+                onEvent = { onControlConfig.onEvent(it) },
                 onDismiss = controller::dismiss,
             )
         }

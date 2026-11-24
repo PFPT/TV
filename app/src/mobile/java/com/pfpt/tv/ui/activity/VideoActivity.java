@@ -69,7 +69,6 @@ import com.pfpt.tv.setting.PlayerSetting;
 import com.pfpt.tv.ui.custom.CustomKeyDown;
 import com.pfpt.tv.ui.dialog.CastDialog;
 import com.pfpt.tv.ui.dialog.ChapterDialog;
-import com.pfpt.tv.ui.dialog.ControlDialog;
 import com.pfpt.tv.ui.dialog.DanmakuDialog;
 import com.pfpt.tv.ui.dialog.DownloadDialog;
 import com.pfpt.tv.ui.dialog.EditionDialog;
@@ -77,6 +76,7 @@ import com.pfpt.tv.ui.dialog.ParseDialog;
 import com.pfpt.tv.ui.dialog.PlayerEngineDialog;
 import com.pfpt.tv.ui.dialog.ReceiveDialog;
 import com.pfpt.tv.ui.dialog.SubtitleDialog;
+import com.pfpt.tv.ui.dialog.TimerDialog;
 import com.pfpt.tv.ui.dialog.TrackDialog;
 import com.pfpt.tv.playback.PlaybackAction;
 import com.pfpt.tv.playback.PlaybackOrientation;
@@ -89,6 +89,10 @@ import com.pfpt.tv.playback.vod.session.DownloadResolveOutcome;
 import com.pfpt.tv.playback.vod.session.VodDownloadResolver;
 import com.pfpt.tv.playback.vod.session.VodSessionViewModel;
 import com.pfpt.tv.ui.vod.compose.VodComposeHostKt;
+import com.pfpt.tv.ui.vod.compose.VodControlConfig;
+import com.pfpt.tv.ui.vod.compose.VodControlConfigEvent;
+import com.pfpt.tv.ui.vod.compose.VodControlConfigIds;
+import com.pfpt.tv.ui.vod.compose.VodControlConfigSheetKt;
 import com.pfpt.tv.ui.vod.compose.VodControlMoreIds;
 import com.pfpt.tv.ui.vod.compose.VodControlMoreVisibility;
 import com.pfpt.tv.ui.vod.compose.VodDownloadConfirm;
@@ -114,11 +118,12 @@ import org.greenrobot.eventbus.ThreadMode;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-public class VideoActivity extends PlaybackActivity implements VodPlaybackActivityAccess, Clock.Callback, CustomKeyDown.Listener, TrackDialog.Listener, ControlDialog.Listener, ParseDialog.Listener, CastDialog.Listener {
+public class VideoActivity extends PlaybackActivity implements VodPlaybackActivityAccess, Clock.Callback, CustomKeyDown.Listener, TrackDialog.Listener, ParseDialog.Listener, CastDialog.Listener {
 
     ActivityVideoBinding mBinding;
     private ViewGroup.LayoutParams mFrameParams;
@@ -309,7 +314,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         return state.hasEpisode() ? state.getEpisode() : new Episode();
     }
 
-    @Override
     public int getScale() {
         return History.resolveScale(mHistory);
     }
@@ -445,7 +449,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         } else {
             VodComposeHostKt.setVodScreen(mBinding.detailCompose, mSession, this::onKeep, this::onName, () -> onChange(), this::onComposeSiteClick, this::onComposeRemarkClick, this::onDownload, this::onReverse, this::onMore, this::onCopy, this::onComposeFlag, this::onComposeQuality, this::onComposeEpisode, this::onComposeQuick);
         }
-        VodSheetsKt.setVodSheetHost(mBinding.sheetCompose, mSession, sheetController, this::onSheetPlayEpisode, this::onSheetDownloadEpisode, this::onSheetDownloadList, this::onSheetDownloadConfirm, this::onSheetInfoShare, this::onSheetControlMore);
+        VodSheetsKt.setVodSheetHost(mBinding.sheetCompose, mSession, sheetController, this::onSheetPlayEpisode, this::onSheetDownloadEpisode, this::onSheetDownloadList, this::onSheetDownloadConfirm, this::onSheetInfoShare, this::onSheetControlMore, this::onSheetControlConfig);
         VodComposeHostKt.setVodControlBars(mBinding.controlTopCompose, mBinding.controlCenterCompose, mBinding.controlLockCompose, mBinding.controlBottomCompose, mSession, this::onBack, this::checkPlay, this::checkNext, this::checkPrev, this::onLock, this::onKeep, this::enterFullscreen, this::onSetting, this::onComposeSeek, this::onComposeScrub, this::onCast, this::onPip, this::onRotate, this::onDanmakuShow);
         VodComposeHostKt.setVodGestureLayer(mBinding.gestureCompose, mSession, this::onComposeBrightness, this::onComposeVolume, this::onComposeSeekPreview, this::onComposeSeekEnd, this::onSingleTap, this::onDoubleTap, this::onSpeedUp, this::onSpeedEnd, this::onComposeFlingUp, this::onComposeFlingDown, this::onComposeScale, this::onComposeTouchEnd);
         observeForever(mViewModel.getResult(), mObserveDetail);
@@ -680,7 +684,105 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void onAllSettings() {
-        ControlDialog.create().parse(isUseParse()).player(player()).show(this);
+        if (player() == null) return;
+        ensureSheetHost();
+        sheetController.showControlConfig(readControlConfig());
+    }
+
+    private VodControlConfig readControlConfig() {
+        List<String> names = new ArrayList<>();
+        int parseIndex = -1;
+        List<Parse> parses = VodConfig.get().getParses();
+        for (int i = 0; i < parses.size(); i++) {
+            Parse item = parses.get(i);
+            names.add(item.getName() == null ? "" : item.getName());
+            if (item.isSelected()) parseIndex = i;
+        }
+        boolean showText = player().haveTrack(C.TRACK_TYPE_TEXT) || player().isVod();
+        boolean showAudio = player().haveTrack(C.TRACK_TYPE_AUDIO);
+        boolean showVideo = player().haveTrack(C.TRACK_TYPE_VIDEO);
+        return VodControlConfigSheetKt.sanitizeVodControlConfig(new VodControlConfig(
+                player().getSpeed(),
+                isUseParse(),
+                names,
+                parseIndex,
+                Arrays.asList(ResUtil.getStringArray(R.array.select_scale)),
+                getScale(),
+                PlaybackAction.getEngineText(player()),
+                player().getDecodeText(),
+                openingLabel(),
+                endingLabel(),
+                player().haveEdition(),
+                player().haveChapter(),
+                showText,
+                showAudio,
+                showVideo,
+                false,
+                DanmakuSetting.isLoad(),
+                player().isRepeatOne(),
+                Timer.get().isRunning()
+        ));
+    }
+
+    private void onSheetControlConfig(VodControlConfigEvent event) {
+        int id = event.getId();
+        if (id == VodControlConfigIds.TIMER) {
+            showTimerDialog();
+            return;
+        }
+        if (player() == null) return;
+        if (id == VodControlConfigIds.SPEED) {
+            onSpeedChanged(event.getSpeed());
+            sheetController.updateControlConfig(readControlConfig());
+        } else if (id == VodControlConfigIds.PARSE) {
+            List<Parse> parses = VodConfig.get().getParses();
+            int index = event.getIndex();
+            if (index < 0 || index >= parses.size()) return;
+            onParse(parses.get(index));
+            sheetController.updateControlConfig(readControlConfig());
+        } else if (id == VodControlConfigIds.SCALE) {
+            String[] scales = ResUtil.getStringArray(R.array.select_scale);
+            int index = event.getIndex();
+            if (index < 0 || index >= scales.length) return;
+            onScale(index);
+            sheetController.updateControlConfig(readControlConfig());
+        } else if (id == VodControlConfigIds.DECODE) {
+            onDecode();
+            sheetController.updateControlConfig(readControlConfig());
+        } else if (id == VodControlConfigIds.REPEAT) {
+            onRepeat();
+            sheetController.updateControlConfig(readControlConfig());
+        } else if (id == VodControlConfigIds.OPENING) {
+            onOpening();
+            sheetController.updateControlConfig(readControlConfig());
+        } else if (id == VodControlConfigIds.OPENING_RESET) {
+            onOpeningReset();
+            sheetController.updateControlConfig(readControlConfig());
+        } else if (id == VodControlConfigIds.ENDING) {
+            onEnding();
+            sheetController.updateControlConfig(readControlConfig());
+        } else if (id == VodControlConfigIds.ENDING_RESET) {
+            onEndingReset();
+            sheetController.updateControlConfig(readControlConfig());
+        } else if (id == VodControlConfigIds.PLAYER) {
+            onChoose();
+        } else if (id == VodControlConfigIds.EDITION) {
+            onEdition();
+        } else if (id == VodControlConfigIds.CHAPTER) {
+            onChapter();
+        } else if (id == VodControlConfigIds.TEXT) {
+            onTrack(C.TRACK_TYPE_TEXT);
+        } else if (id == VodControlConfigIds.AUDIO) {
+            onTrack(C.TRACK_TYPE_AUDIO);
+        } else if (id == VodControlConfigIds.VIDEO) {
+            onTrack(C.TRACK_TYPE_VIDEO);
+        } else if (id == VodControlConfigIds.DANMAKU) {
+            onDanmaku();
+        }
+    }
+
+    private void showTimerDialog() {
+        TimerDialog.create().show(this);
     }
 
     private void onLock() {
@@ -696,25 +798,21 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         setRequestedOrientation(PlaybackOrientation.getRotateOrientation(this));
     }
 
-    @Override
     public void onTrack(int type) {
         TrackDialog.create().type(type).player(player()).show(this);
         hideControl();
     }
 
-    @Override
     public void onEdition() {
         EditionDialog.create().player(player()).show(this);
         hideControl();
     }
 
-    @Override
     public void onChapter() {
         ChapterDialog.create().player(player()).show(this);
         hideControl();
     }
 
-    @Override
     public void onDanmaku() {
         DanmakuDialog.create().player(player()).show(this);
         hideControl();
@@ -726,12 +824,10 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         syncDanmakuEnabled();
     }
 
-    @Override
     public void onRepeat() {
         player().setRepeatOne(!player().isRepeatOne());
     }
 
-    @Override
     public void onSpeedChanged(float speed) {
         player().setSpeed(speed);
         if (mVod != null) mVod.setSpeed(player().getSpeed());
@@ -746,14 +842,12 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         mVod.refresh();
     }
 
-    @Override
     public void onDecode() {
         mProgressClock.setCallback(null);
         PlaybackAction.toggleDecode(player());
         setR1Callback();
     }
 
-    @Override
     public void onEnding() {
         long position = player().getPosition();
         long duration = player().getDuration();
@@ -761,7 +855,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         setR1Callback();
     }
 
-    @Override
     public boolean onEndingReset() {
         setR1Callback();
         setEnding(0);
@@ -772,7 +865,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         mVod.setEnding(ending);
     }
 
-    @Override
     public void onOpening() {
         long position = player().getPosition();
         long duration = player().getDuration();
@@ -780,7 +872,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         setR1Callback();
     }
 
-    @Override
     public boolean onOpeningReset() {
         setR1Callback();
         setOpening(0);
@@ -791,19 +882,16 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         mVod.setOpening(opening);
     }
 
-    @Override
     public String openingLabel() {
         if (mHistory == null || mHistory.getOpening() <= 0) return getString(R.string.play_op);
         return Util.timeMs(mHistory.getOpening());
     }
 
-    @Override
     public String endingLabel() {
         if (mHistory == null || mHistory.getEnding() <= 0) return getString(R.string.play_ed);
         return Util.timeMs(mHistory.getEnding());
     }
 
-    @Override
     public void onChoose() {
         PlayerEngineDialog.show(this, null, player(), playTitle);
         hideControl();
@@ -1248,7 +1336,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         player().stop();
     }
 
-    @Override
     public void onScale(int tag) {
         mPlayerScale.reset();
         setScale(tag);

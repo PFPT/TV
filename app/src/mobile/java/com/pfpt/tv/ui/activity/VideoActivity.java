@@ -18,6 +18,8 @@ import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.RelativeLayout;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.view.ViewCompat;
@@ -26,9 +28,13 @@ import androidx.fragment.app.FragmentActivity;
 import androidx.lifecycle.Observer;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.media3.common.C;
+import androidx.media3.common.Format;
 import androidx.media3.common.MediaMetadata;
+import androidx.media3.common.MimeTypes;
 import androidx.media3.common.Player;
+import androidx.media3.common.Tracks;
 import androidx.media3.common.VideoSize;
+import androidx.media3.ui.DefaultTrackNameProvider;
 import androidx.media3.ui.PlayerSeekView;
 import androidx.media3.ui.PlayerView;
 import androidx.transition.ChangeBounds;
@@ -52,6 +58,7 @@ import com.pfpt.tv.bean.Parse;
 import com.pfpt.tv.bean.Result;
 import com.pfpt.tv.bean.Site;
 import com.pfpt.tv.bean.Sub;
+import com.pfpt.tv.bean.Track;
 import com.pfpt.tv.bean.Url;
 import com.pfpt.tv.bean.Vod;
 import com.pfpt.tv.databinding.ActivityVideoBinding;
@@ -76,6 +83,7 @@ import com.pfpt.tv.ui.dialog.ParseDialog;
 import com.pfpt.tv.ui.dialog.PlayerEngineDialog;
 import com.pfpt.tv.ui.dialog.ReceiveDialog;
 import com.pfpt.tv.ui.dialog.SubtitleDialog;
+import com.pfpt.tv.ui.dialog.OffsetDialog;
 import com.pfpt.tv.ui.dialog.TrackDialog;
 import com.pfpt.tv.playback.PlaybackAction;
 import com.pfpt.tv.playback.PlaybackOrientation;
@@ -101,6 +109,11 @@ import com.pfpt.tv.ui.vod.compose.VodSheetsKt;
 import com.pfpt.tv.ui.vod.compose.VodTimerEvent;
 import com.pfpt.tv.ui.vod.compose.VodTimerIds;
 import com.pfpt.tv.ui.vod.compose.VodTimerState;
+import com.pfpt.tv.ui.vod.compose.VodTrackActions;
+import com.pfpt.tv.ui.vod.compose.VodTrackEvent;
+import com.pfpt.tv.ui.vod.compose.VodTrackIds;
+import com.pfpt.tv.ui.vod.compose.VodTrackSheetKt;
+import com.pfpt.tv.ui.vod.compose.VodTrackState;
 import com.pfpt.tv.utils.Clock;
 import com.pfpt.tv.utils.FileChooser;
 import com.pfpt.tv.utils.ImgUtil;
@@ -151,6 +164,13 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     private boolean rotate;
     private String playTitle = "";
     private final VodSheetController sheetController = new VodSheetController();
+    private int trackSheetType;
+    private final ActivityResultLauncher<Intent> trackSubtitleLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) return;
+        if (player() == null) return;
+        player().setSub(Sub.from(FileChooser.getPathFromUri(result.getData().getData())));
+        sheetController.dismiss();
+    });
     private final Timer.Callback timerSheetCallback = new Timer.Callback() {
         @Override
         public void onTick(long tick) {
@@ -465,7 +485,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         } else {
             VodComposeHostKt.setVodScreen(mBinding.detailCompose, mSession, this::onKeep, this::onName, () -> onChange(), this::onComposeSiteClick, this::onComposeRemarkClick, this::onDownload, this::onReverse, this::onMore, this::onCopy, this::onComposeFlag, this::onComposeQuality, this::onComposeEpisode, this::onComposeQuick);
         }
-        VodSheetsKt.setVodSheetHost(mBinding.sheetCompose, mSession, sheetController, this::onSheetPlayEpisode, this::onSheetDownloadEpisode, this::onSheetDownloadList, this::onSheetDownloadConfirm, this::onSheetInfoShare, this::onSheetControlMore, this::onSheetControlConfig, this::onTimerSheetEvent, this::dismissTimerSheet);
+        VodSheetsKt.setVodSheetHost(mBinding.sheetCompose, mSession, sheetController, this::onSheetPlayEpisode, this::onSheetDownloadEpisode, this::onSheetDownloadList, this::onSheetDownloadConfirm, this::onSheetInfoShare, this::onSheetControlMore, this::onSheetControlConfig, this::onTimerSheetEvent, this::dismissTimerSheet, this::onTrackSheetEvent);
         VodComposeHostKt.setVodControlBars(mBinding.controlTopCompose, mBinding.controlCenterCompose, mBinding.controlLockCompose, mBinding.controlBottomCompose, mSession, this::onBack, this::checkPlay, this::checkNext, this::checkPrev, this::onLock, this::onKeep, this::enterFullscreen, this::onSetting, this::onComposeSeek, this::onComposeScrub, this::onCast, this::onPip, this::onRotate, this::onDanmakuShow);
         VodComposeHostKt.setVodGestureLayer(mBinding.gestureCompose, mSession, this::onComposeBrightness, this::onComposeVolume, this::onComposeSeekPreview, this::onComposeSeekEnd, this::onSingleTap, this::onDoubleTap, this::onSpeedUp, this::onSpeedEnd, this::onComposeFlingUp, this::onComposeFlingDown, this::onComposeScale, this::onComposeTouchEnd);
         observeForever(mViewModel.getResult(), mObserveDetail);
@@ -851,8 +871,67 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     public void onTrack(int type) {
-        TrackDialog.create().type(type).player(player()).show(this);
+        if (player() == null) return;
+        if (type != C.TRACK_TYPE_AUDIO && type != C.TRACK_TYPE_VIDEO && type != C.TRACK_TYPE_TEXT) return;
+        String[] titles = ResUtil.getStringArray(R.array.select_track);
+        int titleIndex = type - 1;
+        if (titleIndex < 0 || titleIndex >= titles.length) return;
+        trackSheetType = type;
         hideControl();
+        ensureSheetHost();
+        sheetController.showTrack(readTrackState(titles[titleIndex]));
+    }
+
+    private VodTrackState readTrackState(String title) {
+        List<Track> tracks = currentTracks(trackSheetType);
+        List<String> names = new ArrayList<>();
+        List<Integer> selected = new ArrayList<>();
+        for (int i = 0; i < tracks.size(); i++) {
+            names.add(tracks.get(i).getName() == null ? "" : tracks.get(i).getName());
+            if (tracks.get(i).isSelected()) selected.add(i);
+        }
+        VodTrackActions actions = VodTrackSheetKt.vodTrackActions(trackSheetType, player().isVod(), player().haveTrack(trackSheetType));
+        return new VodTrackState(title, names, selected, actions.getShowChoose(), actions.getShowSubtitle(), actions.getShowOffset());
+    }
+
+    private List<Track> currentTracks(int type) {
+        List<Track> items = new ArrayList<>();
+        DefaultTrackNameProvider provider = new DefaultTrackNameProvider(getResources());
+        List<Tracks.Group> groups = player().getCurrentTracks().getGroups();
+        for (int i = 0; i < groups.size(); i++) {
+            Tracks.Group group = groups.get(i);
+            if (group.getType() != type) continue;
+            for (int j = 0; j < group.length; j++) {
+                Format format = group.getTrackFormat(j);
+                Track item = new Track(type, provider.getTrackName(format), PlayerHelper.describeFormat(format));
+                item.setSelected(group.isTrackSelected(j));
+                items.add(item);
+            }
+        }
+        return items;
+    }
+
+    private void onTrackSheetEvent(VodTrackEvent event) {
+        if (player() == null) return;
+        int id = event.getId();
+        if (id == VodTrackIds.CHOOSE) {
+            player().pause();
+            FileChooser.from(trackSubtitleLauncher).show(new String[]{MimeTypes.APPLICATION_SUBRIP, MimeTypes.TEXT_SSA, MimeTypes.TEXT_VTT, MimeTypes.APPLICATION_TTML, "audio/*", "text/*", "application/octet-stream"});
+            return;
+        }
+        if (id == VodTrackIds.SUBTITLE) {
+            onSubtitleClick();
+            return;
+        }
+        if (id == VodTrackIds.OFFSET) {
+            OffsetDialog.create().player(player()).type(trackSheetType).show(this);
+            return;
+        }
+        if (id != VodTrackIds.TRACK) return;
+        List<Track> tracks = currentTracks(trackSheetType);
+        int index = event.getIndex();
+        if (index < 0 || index >= tracks.size()) return;
+        player().setTrack(Arrays.asList(tracks.get(index).key(player().getKey()).save()));
     }
 
     public void onEdition() {

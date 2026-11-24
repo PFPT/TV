@@ -72,6 +72,7 @@ enum class VodSheetKind {
     ControlMore,
     ControlConfig,
     Timer,
+    Track,
 }
 
 data class VodDownloadConfirm(
@@ -168,6 +169,17 @@ class VodSheetController {
         private set
     var timer by mutableStateOf(VodTimerState(running = false, tickLabel = ""))
         private set
+    var track by mutableStateOf(
+        VodTrackState(
+            title = "",
+            names = emptyList(),
+            selected = emptyList(),
+            showChoose = false,
+            showSubtitle = false,
+            showOffset = false,
+        ),
+    )
+        private set
 
     fun showEpisodes(download: Boolean) {
         this.download = null
@@ -230,6 +242,13 @@ class VodSheetController {
         timer = state
     }
 
+    fun showTrack(state: VodTrackState) {
+        download = null
+        info = null
+        track = state
+        kind = VodSheetKind.Track
+    }
+
     fun dismiss() {
         kind = VodSheetKind.None
         download = null
@@ -262,6 +281,7 @@ fun ComposeView.setVodSheetHost(
     onControlConfig: VodControlConfigAction,
     onTimer: VodTimerAction,
     onTimerDismiss: Runnable,
+    onTrack: VodTrackAction,
 ) {
     setContent {
         val ui by session.uiState.collectAsStateWithLifecycle()
@@ -329,6 +349,11 @@ fun ComposeView.setVodSheetHost(
                 state = controller.timer,
                 onEvent = { onTimer.onEvent(it) },
                 onDismiss = onTimerDismiss::run,
+            )
+            VodSheetKind.Track -> TrackSheet(
+                state = controller.track,
+                onEvent = { onTrack.onEvent(it) },
+                onDismiss = controller::dismiss,
             )
         }
     }

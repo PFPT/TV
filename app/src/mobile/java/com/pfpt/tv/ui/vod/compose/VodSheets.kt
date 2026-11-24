@@ -71,6 +71,7 @@ enum class VodSheetKind {
     Info,
     ControlMore,
     ControlConfig,
+    Timer,
 }
 
 data class VodDownloadConfirm(
@@ -165,6 +166,8 @@ class VodSheetController {
         ),
     )
         private set
+    var timer by mutableStateOf(VodTimerState(running = false, tickLabel = ""))
+        private set
 
     fun showEpisodes(download: Boolean) {
         this.download = null
@@ -215,6 +218,18 @@ class VodSheetController {
         controlConfig = config
     }
 
+    fun showTimer(state: VodTimerState) {
+        download = null
+        info = null
+        timer = state
+        kind = VodSheetKind.Timer
+    }
+
+    fun updateTimer(state: VodTimerState) {
+        if (kind != VodSheetKind.Timer) return
+        timer = state
+    }
+
     fun dismiss() {
         kind = VodSheetKind.None
         download = null
@@ -245,6 +260,8 @@ fun ComposeView.setVodSheetHost(
     onInfoShare: VodInfoShare,
     onControlMore: VodControlMoreAction,
     onControlConfig: VodControlConfigAction,
+    onTimer: VodTimerAction,
+    onTimerDismiss: Runnable,
 ) {
     setContent {
         val ui by session.uiState.collectAsStateWithLifecycle()
@@ -307,6 +324,11 @@ fun ComposeView.setVodSheetHost(
                 config = controller.controlConfig,
                 onEvent = { onControlConfig.onEvent(it) },
                 onDismiss = controller::dismiss,
+            )
+            VodSheetKind.Timer -> TimerSheet(
+                state = controller.timer,
+                onEvent = { onTimer.onEvent(it) },
+                onDismiss = onTimerDismiss::run,
             )
         }
     }

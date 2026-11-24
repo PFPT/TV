@@ -76,7 +76,6 @@ import com.pfpt.tv.ui.dialog.ParseDialog;
 import com.pfpt.tv.ui.dialog.PlayerEngineDialog;
 import com.pfpt.tv.ui.dialog.ReceiveDialog;
 import com.pfpt.tv.ui.dialog.SubtitleDialog;
-import com.pfpt.tv.ui.dialog.TimerDialog;
 import com.pfpt.tv.ui.dialog.TrackDialog;
 import com.pfpt.tv.playback.PlaybackAction;
 import com.pfpt.tv.playback.PlaybackOrientation;
@@ -99,6 +98,9 @@ import com.pfpt.tv.ui.vod.compose.VodDownloadConfirm;
 import com.pfpt.tv.ui.vod.compose.VodPlayerScale;
 import com.pfpt.tv.ui.vod.compose.VodSheetController;
 import com.pfpt.tv.ui.vod.compose.VodSheetsKt;
+import com.pfpt.tv.ui.vod.compose.VodTimerEvent;
+import com.pfpt.tv.ui.vod.compose.VodTimerIds;
+import com.pfpt.tv.ui.vod.compose.VodTimerState;
 import com.pfpt.tv.utils.Clock;
 import com.pfpt.tv.utils.FileChooser;
 import com.pfpt.tv.utils.ImgUtil;
@@ -119,9 +121,12 @@ import org.greenrobot.eventbus.ThreadMode;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Formatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 public class VideoActivity extends PlaybackActivity implements VodPlaybackActivityAccess, Clock.Callback, CustomKeyDown.Listener, TrackDialog.Listener, ParseDialog.Listener, CastDialog.Listener {
 
@@ -146,6 +151,17 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     private boolean rotate;
     private String playTitle = "";
     private final VodSheetController sheetController = new VodSheetController();
+    private final Timer.Callback timerSheetCallback = new Timer.Callback() {
+        @Override
+        public void onTick(long tick) {
+            sheetController.updateTimer(readTimerState());
+        }
+
+        @Override
+        public void onFinish() {
+            dismissTimerSheet();
+        }
+    };
     private boolean gestureBrightArmed;
     private float gestureBright;
     private boolean gestureVolumeArmed;
@@ -449,7 +465,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         } else {
             VodComposeHostKt.setVodScreen(mBinding.detailCompose, mSession, this::onKeep, this::onName, () -> onChange(), this::onComposeSiteClick, this::onComposeRemarkClick, this::onDownload, this::onReverse, this::onMore, this::onCopy, this::onComposeFlag, this::onComposeQuality, this::onComposeEpisode, this::onComposeQuick);
         }
-        VodSheetsKt.setVodSheetHost(mBinding.sheetCompose, mSession, sheetController, this::onSheetPlayEpisode, this::onSheetDownloadEpisode, this::onSheetDownloadList, this::onSheetDownloadConfirm, this::onSheetInfoShare, this::onSheetControlMore, this::onSheetControlConfig);
+        VodSheetsKt.setVodSheetHost(mBinding.sheetCompose, mSession, sheetController, this::onSheetPlayEpisode, this::onSheetDownloadEpisode, this::onSheetDownloadList, this::onSheetDownloadConfirm, this::onSheetInfoShare, this::onSheetControlMore, this::onSheetControlConfig, this::onTimerSheetEvent, this::dismissTimerSheet);
         VodComposeHostKt.setVodControlBars(mBinding.controlTopCompose, mBinding.controlCenterCompose, mBinding.controlLockCompose, mBinding.controlBottomCompose, mSession, this::onBack, this::checkPlay, this::checkNext, this::checkPrev, this::onLock, this::onKeep, this::enterFullscreen, this::onSetting, this::onComposeSeek, this::onComposeScrub, this::onCast, this::onPip, this::onRotate, this::onDanmakuShow);
         VodComposeHostKt.setVodGestureLayer(mBinding.gestureCompose, mSession, this::onComposeBrightness, this::onComposeVolume, this::onComposeSeekPreview, this::onComposeSeekEnd, this::onSingleTap, this::onDoubleTap, this::onSpeedUp, this::onSpeedEnd, this::onComposeFlingUp, this::onComposeFlingDown, this::onComposeScale, this::onComposeTouchEnd);
         observeForever(mViewModel.getResult(), mObserveDetail);
@@ -782,7 +798,43 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void showTimerDialog() {
-        TimerDialog.create().show(this);
+        ensureSheetHost();
+        Timer.get().setCallback(timerSheetCallback);
+        sheetController.showTimer(readTimerState());
+    }
+
+    private VodTimerState readTimerState() {
+        boolean running = Timer.get().isRunning();
+        String label = "";
+        if (running) {
+            StringBuilder builder = new StringBuilder();
+            Formatter formatter = new Formatter(builder, Locale.getDefault());
+            label = Util.format(builder, formatter, Timer.get().getTick());
+        }
+        return new VodTimerState(running, label);
+    }
+
+    private void onTimerSheetEvent(VodTimerEvent event) {
+        int id = event.getId();
+        if (id == VodTimerIds.DELAY) {
+            Timer.get().delay();
+            return;
+        }
+        if (id == VodTimerIds.CANCEL) {
+            Timer.get().reset();
+            dismissTimerSheet();
+            return;
+        }
+        if (id != VodTimerIds.MINUTES) return;
+        int minutes = event.getMinutes();
+        if (minutes != 5 && minutes != 15 && minutes != 30 && minutes != 60) return;
+        Timer.get().set(TimeUnit.MINUTES.toMillis(minutes));
+        dismissTimerSheet();
+    }
+
+    private void dismissTimerSheet() {
+        Timer.get().setCallback(null);
+        sheetController.dismiss();
     }
 
     private void onLock() {
@@ -1849,6 +1901,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         stopDownloadParse();
         mProgressClock.release();
         saveHistory(true);
+        Timer.get().setCallback(null);
         Timer.get().reset();
         DanmakuApi.cancel();
         RefreshEvent.keep();

@@ -39,6 +39,7 @@ import androidx.media3.common.VideoSize;
 import androidx.media3.ui.DefaultTrackNameProvider;
 import androidx.media3.ui.PlayerSeekView;
 import androidx.media3.ui.PlayerView;
+import androidx.media3.ui.SubtitleView;
 import androidx.transition.ChangeBounds;
 import androidx.transition.TransitionManager;
 import androidx.viewbinding.ViewBinding;
@@ -51,7 +52,9 @@ import com.pfpt.tv.api.DanmakuApi;
 import com.pfpt.tv.api.SiteApi;
 import com.pfpt.tv.api.config.VodConfig;
 import com.pfpt.tv.bean.CastVideo;
+import com.pfpt.tv.bean.Config;
 import com.pfpt.tv.bean.Danmaku;
+import com.pfpt.tv.bean.Device;
 import com.pfpt.tv.bean.Episode;
 import com.pfpt.tv.bean.Flag;
 import com.pfpt.tv.bean.History;
@@ -64,6 +67,8 @@ import com.pfpt.tv.bean.Track;
 import com.pfpt.tv.bean.Url;
 import com.pfpt.tv.bean.Vod;
 import com.pfpt.tv.databinding.ActivityVideoBinding;
+import com.pfpt.tv.dlna.DLNACast;
+import com.pfpt.tv.dlna.DLNACastManager;
 import com.pfpt.tv.event.CastEvent;
 import com.pfpt.tv.event.RefreshEvent;
 import com.pfpt.tv.impl.CustomTarget;
@@ -75,6 +80,8 @@ import com.pfpt.tv.service.PlaybackService;
 import com.pfpt.tv.setting.DanmakuSetting;
 import com.pfpt.tv.setting.LiveSetting;
 import com.pfpt.tv.setting.PlayerSetting;
+import com.pfpt.tv.server.Server;
+import com.pfpt.tv.ui.activity.ScanActivity;
 import com.pfpt.tv.ui.custom.CustomKeyDown;
 import com.pfpt.tv.ui.dialog.CastDialog;
 import com.pfpt.tv.ui.dialog.DanmakuSearchDialog;
@@ -91,6 +98,7 @@ import com.pfpt.tv.playback.vod.VodPlaybackActivityAccess;
 import com.pfpt.tv.playback.vod.VodPlaybackController;
 import com.pfpt.tv.playback.vod.VodPlaybackMedia;
 import com.pfpt.tv.playback.vod.VodPlaybackState;
+import com.pfpt.tv.impl.Callback;
 import com.pfpt.tv.player.PlayerManager;
 import com.pfpt.tv.playback.vod.session.DownloadResolveOutcome;
 import com.pfpt.tv.playback.vod.session.VodDownloadResolver;
@@ -104,9 +112,19 @@ import com.pfpt.tv.ui.vod.compose.VodControlMoreIds;
 import com.pfpt.tv.ui.vod.compose.VodControlMoreVisibility;
 import com.pfpt.tv.ui.vod.compose.VodDownloadConfirm;
 import com.pfpt.tv.ui.vod.compose.VodPlayerScale;
+import com.pfpt.tv.ui.vod.compose.VodOffsetEvent;
+import com.pfpt.tv.ui.vod.compose.VodOffsetIds;
+import com.pfpt.tv.ui.vod.compose.VodOffsetSheetKt;
+import com.pfpt.tv.ui.vod.compose.VodOffsetState;
+import com.pfpt.tv.ui.vod.compose.VodReceiveState;
 import com.pfpt.tv.ui.vod.compose.VodSheetController;
+import com.pfpt.tv.ui.vod.compose.VodSheetKind;
 import com.pfpt.tv.ui.vod.compose.VodSheetsKt;
 import com.pfpt.tv.ui.vod.compose.EngineSelection;
+import com.pfpt.tv.ui.vod.compose.VodCastEvent;
+import com.pfpt.tv.ui.vod.compose.VodCastIds;
+import com.pfpt.tv.ui.vod.compose.VodCastSheetKt;
+import com.pfpt.tv.ui.vod.compose.VodCastState;
 import com.pfpt.tv.ui.vod.compose.VodChapterSheetKt;
 import com.pfpt.tv.ui.vod.compose.VodChapterState;
 import com.pfpt.tv.ui.vod.compose.VodDanmakuEvent;
@@ -119,6 +137,7 @@ import com.pfpt.tv.ui.vod.compose.VodEngineEvent;
 import com.pfpt.tv.ui.vod.compose.VodEngineIds;
 import com.pfpt.tv.ui.vod.compose.VodEngineSheetKt;
 import com.pfpt.tv.ui.vod.compose.VodEngineState;
+import com.pfpt.tv.ui.vod.compose.VodSubtitleIds;
 import com.pfpt.tv.ui.vod.compose.VodTimerEvent;
 import com.pfpt.tv.ui.vod.compose.VodTimerIds;
 import com.pfpt.tv.ui.vod.compose.VodTimerState;
@@ -133,6 +152,7 @@ import com.pfpt.tv.utils.ImgUtil;
 import com.pfpt.tv.utils.Notify;
 import com.pfpt.tv.utils.PiP;
 import com.pfpt.tv.utils.ResUtil;
+import com.pfpt.tv.utils.ScanTask;
 import com.pfpt.tv.utils.Sniffer;
 import com.pfpt.tv.utils.Task;
 import com.pfpt.tv.utils.Timer;
@@ -144,7 +164,11 @@ import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
+import com.github.catvod.net.OkHttp;
+import com.github.catvod.utils.Path;
+
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Formatter;
@@ -153,6 +177,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
+
+import okhttp3.Call;
+import okhttp3.FormBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Response;
 
 public class VideoActivity extends PlaybackActivity implements VodPlaybackActivityAccess, Clock.Callback, CustomKeyDown.Listener, TrackDialog.Listener, ParseDialog.Listener, CastDialog.Listener {
 
@@ -190,6 +220,41 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         player().setDanmaku(Danmaku.from(FileChooser.getPathFromUri(result.getData().getData())));
         sheetController.dismiss();
     });
+    private final List<Device> castDevices = new ArrayList<>();
+    private FormBody.Builder castBody;
+    private OkHttpClient castClient;
+    private CastVideo castVideo;
+    private ScanTask castScanTask;
+    private CastEvent receiveEvent;
+    private final ActivityResultLauncher<Intent> castScanLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || castScanTask == null) return;
+        castScanTask.start(result.getData().getStringExtra("address"));
+    });
+    private final DLNACastManager.DeviceListener castDeviceListener = new DLNACastManager.DeviceListener() {
+        @Override
+        public void onDeviceAdded(Device device) {
+            addCastDevice(device);
+        }
+
+        @Override
+        public void onDeviceRemoved(Device device) {
+            removeCastDevice(device);
+        }
+    };
+    private final okhttp3.Callback castHttpCallback = new okhttp3.Callback() {
+        @Override
+        public void onFailure(@NonNull Call call, @NonNull IOException e) {
+            App.post(() -> Notify.show(e.getMessage()));
+        }
+
+        @Override
+        public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+            try (Response res = response) {
+                if (res.body() != null && res.body().string().equals("OK")) App.post(VideoActivity.this::finishCastSheet);
+                else App.post(() -> Notify.show(R.string.device_offline));
+            }
+        }
+    };
     private final Timer.Callback timerSheetCallback = new Timer.Callback() {
         @Override
         public void onTick(long tick) {
@@ -504,7 +569,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         } else {
             VodComposeHostKt.setVodScreen(mBinding.detailCompose, mSession, this::onKeep, this::onName, () -> onChange(), this::onComposeSiteClick, this::onComposeRemarkClick, this::onDownload, this::onReverse, this::onMore, this::onCopy, this::onComposeFlag, this::onComposeQuality, this::onComposeEpisode, this::onComposeQuick);
         }
-        VodSheetsKt.setVodSheetHost(mBinding.sheetCompose, mSession, sheetController, this::onSheetPlayEpisode, this::onSheetDownloadEpisode, this::onSheetDownloadList, this::onSheetDownloadConfirm, this::onSheetInfoShare, this::onSheetControlMore, this::onSheetControlConfig, this::onTimerSheetEvent, this::dismissTimerSheet, this::onTrackSheetEvent, this::onEditionSheetEvent, this::onChapterSheetEvent, this::onEngineSheetEvent, this::onDanmakuSheetEvent);
+        VodSheetsKt.setVodSheetHost(mBinding.sheetCompose, mSession, sheetController, this::onSheetPlayEpisode, this::onSheetDownloadEpisode, this::onSheetDownloadList, this::onSheetDownloadConfirm, this::onSheetInfoShare, this::onSheetControlMore, this::onSheetControlConfig, this::onTimerSheetEvent, this::dismissTimerSheet, this::onTrackSheetEvent, this::onEditionSheetEvent, this::onChapterSheetEvent, this::onEngineSheetEvent, this::onDanmakuSheetEvent, this::onSubtitleSheetEvent, this::onOffsetSheetEvent, this::onCastSheetEvent, this::dismissCastSheet, this::onReceivePlay, this::dismissReceiveSheet);
         VodComposeHostKt.setVodControlBars(mBinding.controlTopCompose, mBinding.controlCenterCompose, mBinding.controlLockCompose, mBinding.controlBottomCompose, mSession, this::onBack, this::checkPlay, this::checkNext, this::checkPrev, this::onLock, this::onKeep, this::enterFullscreen, this::onSetting, this::onComposeSeek, this::onComposeScrub, this::onCast, this::onPip, this::onRotate, this::onDanmakuShow);
         VodComposeHostKt.setVodGestureLayer(mBinding.gestureCompose, mSession, this::onComposeBrightness, this::onComposeVolume, this::onComposeSeekPreview, this::onComposeSeekEnd, this::onSingleTap, this::onDoubleTap, this::onSpeedUp, this::onSpeedEnd, this::onComposeFlingUp, this::onComposeFlingDown, this::onComposeScale, this::onComposeTouchEnd);
         observeForever(mViewModel.getResult(), mObserveDetail);
@@ -688,7 +753,118 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void onCast() {
-        CastDialog.create().history(mHistory).video(new CastVideo(getNameText(), player().getUrl(), player().getPosition(), player().getHeaders())).fm(true).show(this);
+        if (player() == null || mHistory == null) return;
+        hideControl();
+        ensureSheetHost();
+        releaseCastDiscovery();
+        castVideo = new CastVideo(getNameText(), player().getUrl(), player().getPosition(), player().getHeaders());
+        castClient = OkHttp.client(Constant.TIMEOUT_SYNC);
+        castBody = new FormBody.Builder();
+        castBody.add("device", Device.get().toString());
+        castBody.add("config", Config.vod().toString());
+        String id = mHistory.getVodId();
+        String fd = id;
+        if (fd != null && fd.startsWith("/")) fd = Server.get().getAddress() + "/file" + fd.replace(Path.rootPath(), "");
+        if (fd != null && fd.startsWith("file")) fd = Server.get().getAddress() + "/" + fd.replace(Path.rootPath(), "").replace("://", "");
+        if (fd != null && fd.contains("127.0.0.1")) fd = fd.replace("127.0.0.1", com.github.catvod.utils.Util.getIp());
+        String history = mHistory.toString();
+        if (id != null && fd != null) history = history.replace(id, fd);
+        castBody.add("history", history);
+        castScanTask = new ScanTask(this::addCastDevice);
+        DLNACastManager.get().init(this);
+        DLNACastManager.get().setDeviceListener(castDeviceListener);
+        sheetController.showCast(new VodCastState(getString(R.string.device_select), List.of(), List.of()));
+        loadCastDevices();
+    }
+
+    private void loadCastDevices() {
+        List<Device> saved = Device.getAll();
+        setCastDevices(saved == null ? List.of() : saved);
+        List<Device> registered = DLNACastManager.get().getRegistered();
+        if (registered != null && !registered.isEmpty()) addCastDevices(registered);
+        if (castDevices.isEmpty()) refreshCastDevices();
+        else DLNACastManager.get().search();
+    }
+
+    private void refreshCastDevices() {
+        castDevices.clear();
+        publishCast();
+        Device.delete();
+        if (castScanTask != null) castScanTask.start();
+        DLNACastManager.get().search();
+        List<Device> registered = DLNACastManager.get().getRegistered();
+        if (registered != null && !registered.isEmpty()) addCastDevices(registered);
+    }
+
+    private void setCastDevices(List<Device> items) {
+        castDevices.clear();
+        if (items != null) castDevices.addAll(items);
+        publishCast();
+    }
+
+    private void addCastDevice(Device device) {
+        if (device == null || sheetController.getKind() != VodSheetKind.Cast) return;
+        List<Device> next = Stream.concat(castDevices.stream(), Stream.of(device)).distinct().sorted().toList();
+        setCastDevices(next);
+    }
+
+    private void addCastDevices(List<Device> items) {
+        if (items == null || items.isEmpty() || sheetController.getKind() != VodSheetKind.Cast) return;
+        List<Device> next = Stream.concat(castDevices.stream(), items.stream()).distinct().sorted().toList();
+        setCastDevices(next);
+    }
+
+    private void removeCastDevice(Device device) {
+        if (sheetController.getKind() != VodSheetKind.Cast) return;
+        if (castDevices.remove(device)) publishCast();
+    }
+
+    private void publishCast() {
+        List<String> names = new ArrayList<>();
+        List<String> hosts = new ArrayList<>();
+        for (Device device : castDevices) {
+            names.add(device.getName() == null ? "" : device.getName());
+            hosts.add(device.getHost() == null ? "" : device.getHost());
+        }
+        sheetController.updateCast(new VodCastState(getString(R.string.device_select), names, hosts));
+    }
+
+    private void onCastSheetEvent(VodCastEvent event) {
+        int id = event.getId();
+        if (id == VodCastIds.SCAN) {
+            castScanLauncher.launch(new Intent(this, ScanActivity.class));
+            return;
+        }
+        if (id == VodCastIds.REFRESH) {
+            refreshCastDevices();
+            return;
+        }
+        if (id != VodCastIds.DEVICE || castBody == null || castClient == null || castVideo == null) return;
+        int index = event.getIndex();
+        if (index < 0 || index >= castDevices.size()) return;
+        Device item = castDevices.get(index);
+        if (item.isDLNA()) new DLNACast(castVideo, this::finishCastSheet).cast(item);
+        else OkHttp.newCall(castClient, item.getIp().concat("/action?do=cast"), castBody.build()).enqueue(castHttpCallback);
+    }
+
+    private void finishCastSheet() {
+        if (sheetController.getKind() != VodSheetKind.Cast) return;
+        onCasted();
+        dismissCastSheet();
+    }
+
+    private void dismissCastSheet() {
+        releaseCastDiscovery();
+        if (sheetController.getKind() == VodSheetKind.Cast) sheetController.dismiss();
+    }
+
+    private void releaseCastDiscovery() {
+        DLNACastManager.get().setDeviceListener(null);
+        DLNACastManager.get().release(this);
+        if (castScanTask != null) {
+            castScanTask.stop();
+            castScanTask = null;
+        }
     }
 
     private void onKeep() {
@@ -943,7 +1119,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
             return;
         }
         if (id == VodTrackIds.OFFSET) {
-            OffsetDialog.create().player(player()).type(trackSheetType).show(this);
+            showOffsetSheet();
             return;
         }
         if (id != VodTrackIds.TRACK) return;
@@ -1477,8 +1653,72 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
 
     @Override
     public void onSubtitleClick() {
-        SubtitleDialog.create().view(mBinding.player.getSubtitleView()).player(player()).show(this);
+        if (mBinding.player.getSubtitleView() == null) return;
         hideControl();
+        ensureSheetHost();
+        sheetController.showSubtitle();
+    }
+
+    private void onSubtitleSheetEvent(int id) {
+        SubtitleView view = mBinding.player.getSubtitleView();
+        if (view == null) return;
+        if (id == VodSubtitleIds.LARGE) {
+            view.addTextSize(0.002f);
+            PlayerSetting.putSubtitleTextSize(view.getTextSize());
+        } else if (id == VodSubtitleIds.SMALL) {
+            view.subTextSize(0.002f);
+            PlayerSetting.putSubtitleTextSize(view.getTextSize());
+        } else if (id == VodSubtitleIds.UP) {
+            view.addPosition(0.005f);
+            PlayerSetting.putSubtitlePosition(view.getPosition());
+        } else if (id == VodSubtitleIds.DOWN) {
+            view.subPosition(0.005f);
+            PlayerSetting.putSubtitlePosition(view.getPosition());
+        } else if (id == VodSubtitleIds.RESET) {
+            PlayerSetting.putSubtitleTextSize(0.0f);
+            PlayerSetting.putSubtitlePosition(0.0f);
+            view.reset();
+        } else {
+            return;
+        }
+        if (player() != null && !player().isReleased()) player().setSubtitleStyle();
+    }
+
+    private void showOffsetSheet() {
+        if (player() == null) return;
+        if (trackSheetType != C.TRACK_TYPE_AUDIO && trackSheetType != C.TRACK_TYPE_TEXT) return;
+        ensureSheetHost();
+        sheetController.showOffset(readOffsetState());
+    }
+
+    private VodOffsetState readOffsetState() {
+        boolean audio = trackSheetType == C.TRACK_TYPE_AUDIO;
+        float from = audio ? -10000f : -300000f;
+        float to = audio ? 10000f : 300000f;
+        float step = audio ? 100f : 1000f;
+        long raw = audio ? player().getAudioOffsetMs() : player().getTextOffsetMs();
+        float value = VodOffsetSheetKt.snapOffset(raw, from, to, step);
+        return new VodOffsetState(getString(R.string.offset_setting), audio, value);
+    }
+
+    private void onOffsetSheetEvent(VodOffsetEvent event) {
+        if (player() == null) return;
+        boolean audio = trackSheetType == C.TRACK_TYPE_AUDIO;
+        if (event.getId() == VodOffsetIds.RESET) {
+            if (audio) player().setAudioOffsetMs(0);
+            else player().setTextOffsetMs(0);
+            sheetController.updateOffset(readOffsetState());
+            return;
+        }
+        if (event.getId() != VodOffsetIds.CHANGE) return;
+        float from = audio ? -10000f : -300000f;
+        float to = audio ? 10000f : 300000f;
+        float step = audio ? 100f : 1000f;
+        float value = VodOffsetSheetKt.snapOffset(event.getValueMs(), from, to, step);
+        long ms = Math.round(value);
+        if (audio) player().setAudioOffsetMs(ms);
+        else player().setTextOffsetMs(ms);
+        sheetController.updateOffset(new VodOffsetState(getString(R.string.offset_setting), audio, value));
     }
 
     @Override
@@ -1502,7 +1742,46 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void onCastEvent(CastEvent event) {
         if (isRedirect()) return;
-        ReceiveDialog.create().event(event).show(this);
+        if (event == null || event.history() == null) return;
+        receiveEvent = event;
+        ensureSheetHost();
+        sheetController.showReceive(readReceiveState(false));
+    }
+
+    private VodReceiveState readReceiveState(boolean loading) {
+        History item = receiveEvent.history();
+        String from = receiveEvent.device() == null || receiveEvent.device().getName() == null ? "" : receiveEvent.device().getName();
+        String name = item.getVodName() == null ? "" : item.getVodName();
+        String pic = item.getVodPic() == null ? "" : item.getVodPic();
+        return new VodReceiveState(name, from, pic, loading);
+    }
+
+    private void onReceivePlay() {
+        if (receiveEvent == null || receiveEvent.history() == null) return;
+        if (sheetController.getKind() != VodSheetKind.Receive) return;
+        if (VodConfig.get().getConfig().equals(receiveEvent.config())) {
+            VideoActivity.cast(this, receiveEvent.history().save(VodConfig.getCid()));
+            dismissReceiveSheet();
+            return;
+        }
+        sheetController.updateReceive(readReceiveState(true));
+        VodConfig.load(receiveEvent.config(), new Callback() {
+            @Override
+            public void success() {
+                onReceivePlay();
+            }
+
+            @Override
+            public void error(String msg) {
+                Notify.show(msg);
+                if (sheetController.getKind() == VodSheetKind.Receive) sheetController.updateReceive(readReceiveState(false));
+            }
+        });
+    }
+
+    private void dismissReceiveSheet() {
+        receiveEvent = null;
+        if (sheetController.getKind() == VodSheetKind.Receive) sheetController.dismiss();
     }
 
     @Subscribe(threadMode = ThreadMode.MAIN)
@@ -2112,6 +2391,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         saveHistory(true);
         Timer.get().setCallback(null);
         Timer.get().reset();
+        releaseCastDiscovery();
         DanmakuApi.cancel();
         RefreshEvent.keep();
         App.removeCallbacks(mR1, mR2, mR3, mR4);

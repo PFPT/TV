@@ -77,6 +77,10 @@ enum class VodSheetKind {
     Chapter,
     Engine,
     Danmaku,
+    Subtitle,
+    Offset,
+    Cast,
+    Receive,
 }
 
 data class VodDownloadConfirm(
@@ -192,6 +196,12 @@ class VodSheetController {
         private set
     var danmaku by mutableStateOf(VodDanmakuState(title = "", names = emptyList(), selected = -1, showSearch = false))
         private set
+    var offset by mutableStateOf(VodOffsetState(title = "", audio = false, valueMs = 0f))
+        private set
+    var cast by mutableStateOf(VodCastState(title = "", names = emptyList(), hosts = emptyList()))
+        private set
+    var receive by mutableStateOf(VodReceiveState(name = "", from = "", pic = "", loading = false))
+        private set
 
     fun showEpisodes(download: Boolean) {
         this.download = null
@@ -289,6 +299,48 @@ class VodSheetController {
         kind = VodSheetKind.Danmaku
     }
 
+    fun showSubtitle() {
+        download = null
+        info = null
+        kind = VodSheetKind.Subtitle
+    }
+
+    fun showOffset(state: VodOffsetState) {
+        download = null
+        info = null
+        offset = state
+        kind = VodSheetKind.Offset
+    }
+
+    fun updateOffset(state: VodOffsetState) {
+        if (kind != VodSheetKind.Offset) return
+        offset = state
+    }
+
+    fun showCast(state: VodCastState) {
+        download = null
+        info = null
+        cast = state
+        kind = VodSheetKind.Cast
+    }
+
+    fun updateCast(state: VodCastState) {
+        if (kind != VodSheetKind.Cast) return
+        cast = state
+    }
+
+    fun showReceive(state: VodReceiveState) {
+        download = null
+        info = null
+        receive = state
+        kind = VodSheetKind.Receive
+    }
+
+    fun updateReceive(state: VodReceiveState) {
+        if (kind != VodSheetKind.Receive) return
+        receive = state
+    }
+
     fun dismiss() {
         kind = VodSheetKind.None
         download = null
@@ -326,6 +378,12 @@ fun ComposeView.setVodSheetHost(
     onChapter: VodChapterAction,
     onEngine: VodEngineAction,
     onDanmaku: VodDanmakuAction,
+    onSubtitle: VodSubtitleAction,
+    onOffset: VodOffsetAction,
+    onCast: VodCastAction,
+    onCastDismiss: Runnable,
+    onReceive: VodReceiveAction,
+    onReceiveDismiss: Runnable,
 ) {
     setContent {
         val ui by session.uiState.collectAsStateWithLifecycle()
@@ -418,6 +476,25 @@ fun ComposeView.setVodSheetHost(
                 state = controller.danmaku,
                 onEvent = { onDanmaku.onEvent(it) },
                 onDismiss = controller::dismiss,
+            )
+            VodSheetKind.Subtitle -> SubtitleSheet(
+                onAction = { onSubtitle.onAction(it) },
+                onDismiss = controller::dismiss,
+            )
+            VodSheetKind.Offset -> OffsetSheet(
+                state = controller.offset,
+                onEvent = { onOffset.onEvent(it) },
+                onDismiss = controller::dismiss,
+            )
+            VodSheetKind.Cast -> CastSheet(
+                state = controller.cast,
+                onEvent = { onCast.onEvent(it) },
+                onDismiss = onCastDismiss::run,
+            )
+            VodSheetKind.Receive -> ReceiveSheet(
+                state = controller.receive,
+                onPlay = { onReceive.onPlay() },
+                onDismiss = onReceiveDismiss::run,
             )
         }
     }

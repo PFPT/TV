@@ -303,7 +303,7 @@ public class Site implements Parcelable {
 
     public Site fetchExt() {
         if (!getExt().startsWith("http")) return this;
-        String extend = OkHttp.string(getExt());
+        String extend = OkHttp.string(OkHttp.trusted(), getExt());
         if (!extend.isEmpty()) setExt(extend);
         return this;
     }

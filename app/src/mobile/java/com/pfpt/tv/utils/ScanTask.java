@@ -2,6 +2,7 @@ package com.pfpt.tv.utils;
 
 import com.pfpt.tv.App;
 import com.pfpt.tv.bean.Device;
+import com.pfpt.tv.server.LanToken;
 import com.pfpt.tv.server.Server;
 import com.github.catvod.net.OkHttp;
 
@@ -11,6 +12,7 @@ import java.util.concurrent.Future;
 import java.util.stream.IntStream;
 
 import okhttp3.OkHttpClient;
+import okhttp3.Request;
 import okhttp3.Response;
 
 public class ScanTask {
@@ -51,10 +53,16 @@ public class ScanTask {
     }
 
     private void findDevice(String url) {
-        if (url.equals(Server.get().getAddress())) return;
-        try (Response res = OkHttp.newCall(client, url.concat("/device"), "scan").execute()) {
+        String origin = LanToken.origin(url);
+        if (origin.equals(Server.get().getAddress())) return;
+        Request request = new Request.Builder().url(origin + "/device").header(LanToken.CLIENT_HEADER, LanToken.CLIENT).tag("scan").build();
+        try (Response res = client.newCall(request).execute()) {
             Device device = Device.objectFrom(res.body().string());
-            if (device != null) App.post(() -> {
+            if (device == null) return;
+            String token = res.header(LanToken.TOKEN_HEADER);
+            if (token == null || token.isEmpty()) token = LanToken.query(url, LanToken.QUERY);
+            LanToken.pair(device.getUuid(), token);
+            App.post(() -> {
                 if (listener != null) listener.onFind(device.save());
             });
         } catch (Exception ignored) {

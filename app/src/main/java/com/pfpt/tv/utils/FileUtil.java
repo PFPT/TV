@@ -71,7 +71,10 @@ public class FileUtil {
             Enumeration<?> entries = zip.entries();
             while (entries.hasMoreElements()) {
                 ZipEntry entry = (ZipEntry) entries.nextElement();
-                File out = new File(path, entry.getName());
+                String name = entry.getName();
+                if (name == null || name.isBlank()) continue;
+                File out = StoragePaths.confine(path, name);
+                if (out == null) continue;
                 if (entry.isDirectory()) out.mkdirs();
                 else Path.copy(zip.getInputStream(entry), out);
             }

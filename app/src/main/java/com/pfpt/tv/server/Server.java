@@ -7,6 +7,7 @@ import com.github.catvod.utils.Util;
 
 public class Server {
 
+    private final String token = LanToken.generate();
     private volatile PlaybackService service;
     private volatile Nano nano;
 
@@ -26,12 +27,16 @@ public class Server {
         this.service = service;
     }
 
+    public String getToken() {
+        return token;
+    }
+
     public String getAddress() {
         return getAddress(false);
     }
 
     public String getAddress(int tab) {
-        return getAddress(false) + "?tab=" + tab;
+        return LanToken.with(getAddress(false) + "?tab=" + tab, token);
     }
 
     public String getAddress(String path) {
@@ -40,6 +45,10 @@ public class Server {
 
     public String getAddress(boolean local) {
         return "http://" + (local ? "127.0.0.1" : Util.getIp()) + ":" + Proxy.getPort();
+    }
+
+    public String share(String path) {
+        return LanToken.with(getAddress(false) + path, token);
     }
 
     public synchronized void start() {

@@ -61,10 +61,37 @@ public class Nano extends NanoHTTPD {
         String url = session.getUri().trim();
         Map<String, String> files = new HashMap<>();
         if (session.getMethod() == Method.POST) parse(session, files);
+        if (needsLoopback(url) && !isLoopback(session)) return error(Response.Status.FORBIDDEN, "Forbidden");
         if (url.startsWith("/tvbus")) return ok(LiveConfig.getResp());
-        if (url.startsWith("/device")) return ok(Device.get().toString());
+        if (url.startsWith("/device")) return device(session);
+        boolean open = isLoopback(session) || LanToken.accept(Server.get().getToken(), session.getParms(), session.getHeaders());
+        if (!open && (needsToken(url) || !isProcess(url))) return error(Response.Status.FORBIDDEN, "Forbidden");
+        Response response = dispatch(session, url, files);
+        return finish(session, response);
+    }
+
+    private Response device(IHTTPSession session) {
+        Response response = ok(Device.get().toPublicJson());
+        String client = session.getHeaders().get(LanToken.CLIENT_HEADER);
+        if (LanToken.CLIENT.equals(client)) response.addHeader(LanToken.TOKEN_HEADER, Server.get().getToken());
+        return response;
+    }
+
+    private Response dispatch(IHTTPSession session, String url, Map<String, String> files) {
         for (Process process : process) if (process.isRequest(session, url)) return process.doResponse(session, url, files);
         return getAssets(url.substring(1));
+    }
+
+    private Response finish(IHTTPSession session, Response response) {
+        if (response == null || session.getParms() == null) return response;
+        String token = Server.get().getToken();
+        if (LanToken.matches(token, session.getParms().get(LanToken.QUERY))) response.addHeader("Set-Cookie", LanToken.cookieHeader(token));
+        return response;
+    }
+
+    private boolean isProcess(String url) {
+        for (Process item : process) if (item.isRequest(null, url)) return true;
+        return false;
     }
 
     private void parse(IHTTPSession session, Map<String, String> files) {
@@ -76,8 +103,22 @@ public class Nano extends NanoHTTPD {
         }
     }
 
+    private static boolean needsLoopback(String url) {
+        return url.startsWith("/proxy") || url.startsWith("/parse") || url.startsWith("/cache") || url.startsWith("/tvbus");
+    }
+
+    private static boolean needsToken(String url) {
+        return url.startsWith("/action") || url.startsWith("/file") || url.startsWith("/upload") || url.startsWith("/newFolder") || url.startsWith("/delFolder") || url.startsWith("/delFile");
+    }
+
+    private static boolean isLoopback(IHTTPSession session) {
+        String host = session.getRemoteIpAddress();
+        return "127.0.0.1".equals(host) || "::1".equals(host) || "localhost".equals(host) || "::ffff:127.0.0.1".equals(host);
+    }
+
     private Response getAssets(String path) {
         try {
+            if (path.contains("..")) return newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_HTML, null, 0);
             if (path.isEmpty()) path = INDEX;
             InputStream is = Asset.open(path);
             return newFixedLengthResponse(Response.Status.OK, getMimeTypeForFile(path), is, -1);

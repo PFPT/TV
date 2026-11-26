@@ -9,7 +9,7 @@ import java.util.Map;
 public record CastVideo(String name, String url, long position, Map<String, String> headers) {
 
     public CastVideo {
-        if (url.startsWith("file")) url = Server.get().getAddress() + "/" + url.replace(Path.rootPath(), "").replace("://", "");
+        if (url.startsWith("file")) url = Server.get().share("/" + url.replace(Path.rootPath(), "").replace("://", ""));
         if (url.contains("127.0.0.1")) url = url.replace("127.0.0.1", Util.getIp());
     }
 }

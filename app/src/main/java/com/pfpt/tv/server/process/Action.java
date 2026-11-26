@@ -14,12 +14,13 @@ import com.pfpt.tv.event.CastEvent;
 import com.pfpt.tv.event.RefreshEvent;
 import com.pfpt.tv.event.ServerEvent;
 import com.pfpt.tv.impl.Callback;
+import com.pfpt.tv.server.LanToken;
 import com.pfpt.tv.server.Nano;
 import com.pfpt.tv.server.Server;
 import com.pfpt.tv.server.impl.Process;
 import com.pfpt.tv.service.PlaybackService;
-import com.pfpt.tv.utils.FileUtil;
 import com.pfpt.tv.utils.Notify;
+import com.pfpt.tv.utils.StoragePaths;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Path;
 
@@ -63,8 +64,9 @@ public class Action implements Process {
     private void onFile(Map<String, String> params) {
         String path = params.get("path");
         if (TextUtils.isEmpty(path)) return;
-        if (path.endsWith(".apk")) FileUtil.openFile(Path.local(path));
-        else if (path.endsWith(".srt") || path.endsWith(".ssa") || path.endsWith(".ass")) RefreshEvent.subtitle(path);
+        if (path.toLowerCase().endsWith(".apk")) return;
+        if (StoragePaths.confine(Path.root(), path) == null) return;
+        if (path.endsWith(".srt") || path.endsWith(".ssa") || path.endsWith(".ass")) RefreshEvent.subtitle(path);
         else ServerEvent.setting(path);
     }
 
@@ -138,8 +140,11 @@ public class Action implements Process {
         String mode = Objects.requireNonNullElse(params.get("mode"), "0");
         if (params.get("device") != null && (mode.equals("0") || mode.equals("2"))) {
             Device device = Device.objectFrom(params.get("device"));
-            if ("history".equals(type)) sendHistory(device, params);
-            else if ("keep".equals(type)) sendKeep(device);
+            if (device != null) {
+                LanToken.pair(device.getUuid(), params.get("token"));
+                if ("history".equals(type)) sendHistory(device, params);
+                else if ("keep".equals(type)) sendKeep(device);
+            }
         }
         if (mode.equals("0") || mode.equals("1")) {
             if ("history".equals(type)) syncHistory(params, force);
@@ -149,7 +154,7 @@ public class Action implements Process {
 
     private void post(Device device, String type, FormBody.Builder body) {
         try {
-            OkHttp.newCall(OkHttp.client(Constant.TIMEOUT_SYNC), device.getIp().concat("/action?do=sync&mode=0&type=" + type), body.build()).execute();
+            OkHttp.newCall(OkHttp.client(Constant.TIMEOUT_SYNC), LanToken.action(device.getIp(), device.getUuid(), "/action?do=sync&mode=0&type=" + type), body.build()).execute();
         } catch (Exception e) {
             App.post(() -> Notify.show(e.getMessage()));
         }

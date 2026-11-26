@@ -13,6 +13,7 @@ import com.pfpt.tv.bean.Device;
 import com.pfpt.tv.bean.History;
 import com.pfpt.tv.dlna.DLNACast;
 import com.pfpt.tv.dlna.DLNACastManager;
+import com.pfpt.tv.server.LanToken;
 import com.pfpt.tv.server.Server;
 import com.pfpt.tv.ui.vod.compose.VodCastEvent;
 import com.pfpt.tv.ui.vod.compose.VodCastIds;
@@ -88,8 +89,8 @@ public final class VodCastSession {
         body.add("config", Config.vod().toString());
         String id = history.getVodId();
         String fd = id;
-        if (fd != null && fd.startsWith("/")) fd = Server.get().getAddress() + "/file" + fd.replace(Path.rootPath(), "");
-        if (fd != null && fd.startsWith("file")) fd = Server.get().getAddress() + "/" + fd.replace(Path.rootPath(), "").replace("://", "");
+        if (fd != null && fd.startsWith("/")) fd = Server.get().share("/file" + fd.replace(Path.rootPath(), ""));
+        if (fd != null && fd.startsWith("file")) fd = Server.get().share("/" + fd.replace(Path.rootPath(), "").replace("://", ""));
         if (fd != null && fd.contains("127.0.0.1")) fd = fd.replace("127.0.0.1", com.github.catvod.utils.Util.getIp());
         String saved = history.toString();
         if (id != null && fd != null) saved = saved.replace(id, fd);
@@ -120,7 +121,7 @@ public final class VodCastSession {
         if (index < 0 || index >= devices.size()) return;
         Device item = devices.get(index);
         if (item.isDLNA()) new DLNACast(video, this::finish).cast(item);
-        else OkHttp.newCall(client, item.getIp().concat("/action?do=cast"), body.build()).enqueue(httpCallback);
+        else OkHttp.newCall(client, LanToken.action(item.getIp(), item.getUuid(), "/action?do=cast"), body.build()).enqueue(httpCallback);
     }
 
     public void dismiss() {

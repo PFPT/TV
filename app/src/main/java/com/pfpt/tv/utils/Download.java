@@ -21,6 +21,7 @@ public class Download {
     private Callback callback;
     private Future<?> future;
     private String tag;
+    private boolean trusted;
 
     public static Download create(String url, File file) {
         return new Download(url, file);
@@ -30,6 +31,11 @@ public class Download {
         this.tag = url;
         this.url = url;
         this.file = file;
+    }
+
+    public Download trusted() {
+        this.trusted = true;
+        return this;
     }
 
     public Download tag(String tag) {
@@ -49,13 +55,13 @@ public class Download {
 
     public Download cancel() {
         if (future != null) future.cancel(true);
-        OkHttp.cancel(tag);
+        OkHttp.cancel(trusted ? OkHttp.trusted() : OkHttp.client(), tag);
         future = null;
         return this;
     }
 
     private void doInBackground() {
-        try (Response res = OkHttp.newCall(url, tag).execute()) {
+        try (Response res = OkHttp.newCall(trusted ? OkHttp.trusted() : OkHttp.client(), url, tag).execute()) {
             download(res.body().byteStream(), getLength(res));
             if (callback != null) App.post(() -> callback.success(file));
         } catch (Exception e) {

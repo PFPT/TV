@@ -37,6 +37,7 @@ public class OkHttp {
     private AuthInterceptor authInterceptor;
     private OkAuthenticator authenticator;
     private OkProxySelector selector;
+    private OkHttpClient trusted;
     private OkHttpClient client;
     private OkHttpClient player;
     private OkDns dns;
@@ -80,6 +81,11 @@ public class OkHttp {
         return get().client = getBuilder().build();
     }
 
+    public static synchronized OkHttpClient trusted() {
+        if (get().trusted != null) return get().trusted;
+        return get().trusted = trustedBuilder().build();
+    }
+
     public static synchronized OkHttpClient player() {
         if (get().player != null) return get().player;
         return get().player = getBuilder().build();
@@ -99,6 +105,16 @@ public class OkHttp {
 
     public static OkHttpClient client(boolean redirect, long timeout) {
         return redirect ? client(timeout) : noRedirect(timeout);
+    }
+
+    public static String string(OkHttpClient client, String url) {
+        if (!url.startsWith("http")) return "";
+        try (Response res = newCall(client, url).execute()) {
+            return res.body().string();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "";
+        }
     }
 
     public static String string(String url) {
@@ -190,7 +206,13 @@ public class OkHttp {
         OkHttpClient.Builder builder = new OkHttpClient.Builder().addInterceptor(requestInterceptor()).addInterceptor(authInterceptor()).addNetworkInterceptor(responseInterceptor()).connectTimeout(TIMEOUT, TimeUnit.MILLISECONDS).readTimeout(TIMEOUT, TimeUnit.MILLISECONDS).writeTimeout(TIMEOUT, TimeUnit.MILLISECONDS).dns(dns()).hostnameVerifier((hostname, session) -> true).sslSocketFactory(getSSLContext().getSocketFactory(), trustAllCertificates());
         HttpLoggingInterceptor logging = new HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BODY);
         builder.proxyAuthenticator(authenticator());
-        //builder.addNetworkInterceptor(logging);
+        builder.proxySelector(selector());
+        return builder;
+    }
+
+    private static OkHttpClient.Builder trustedBuilder() {
+        OkHttpClient.Builder builder = new OkHttpClient.Builder().addInterceptor(requestInterceptor()).addInterceptor(authInterceptor()).addNetworkInterceptor(responseInterceptor()).connectTimeout(TIMEOUT, TimeUnit.MILLISECONDS).readTimeout(TIMEOUT, TimeUnit.MILLISECONDS).writeTimeout(TIMEOUT, TimeUnit.MILLISECONDS).dns(dns());
+        builder.proxyAuthenticator(authenticator());
         builder.proxySelector(selector());
         return builder;
     }

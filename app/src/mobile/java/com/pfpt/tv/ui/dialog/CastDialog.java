@@ -24,6 +24,7 @@ import com.pfpt.tv.bean.History;
 import com.pfpt.tv.databinding.DialogDeviceBinding;
 import com.pfpt.tv.dlna.DLNACast;
 import com.pfpt.tv.dlna.DLNACastManager;
+import com.pfpt.tv.server.LanToken;
 import com.pfpt.tv.server.Server;
 import com.pfpt.tv.ui.activity.ScanActivity;
 import com.pfpt.tv.ui.adapter.DeviceAdapter;
@@ -68,8 +69,8 @@ public class CastDialog extends BaseBottomSheetDialog implements DeviceAdapter.O
     public CastDialog history(History history) {
         String id = history.getVodId();
         String fd = history.getVodId();
-        if (fd.startsWith("/")) fd = Server.get().getAddress() + "/file" + fd.replace(Path.rootPath(), "");
-        if (fd.startsWith("file")) fd = Server.get().getAddress() + "/" + fd.replace(Path.rootPath(), "").replace("://", "");
+        if (fd.startsWith("/")) fd = Server.get().share("/file" + fd.replace(Path.rootPath(), ""));
+        if (fd.startsWith("file")) fd = Server.get().share("/" + fd.replace(Path.rootPath(), "").replace("://", ""));
         if (fd.contains("127.0.0.1")) fd = fd.replace("127.0.0.1", Util.getIp());
         body.add("history", history.toString().replace(id, fd));
         return this;
@@ -179,7 +180,7 @@ public class CastDialog extends BaseBottomSheetDialog implements DeviceAdapter.O
     @Override
     public void onItemClick(Device item) {
         if (item.isDLNA()) new DLNACast(video, this::onCasted).cast(item);
-        else OkHttp.newCall(client, item.getIp().concat("/action?do=cast"), body.build()).enqueue(this);
+        else OkHttp.newCall(client, LanToken.action(item.getIp(), item.getUuid(), "/action?do=cast"), body.build()).enqueue(this);
     }
 
     @Override

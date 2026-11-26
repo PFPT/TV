@@ -260,6 +260,7 @@ public class PlaybackService extends MediaLibraryService implements MediaLibrary
     @NonNull
     @Override
     public MediaSession.ConnectionResult onConnect(@NonNull MediaSession session, @NonNull MediaSession.ControllerInfo controller) {
+        if (!isTrustedController(session, controller)) return MediaSession.ConnectionResult.reject();
         clients.connect(controller, getPackageName());
         SessionCommands commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon().add(COMMAND_REPEAT).build();
         return new MediaLibrarySession.ConnectionResult.AcceptedResultBuilder(session).setAvailableSessionCommands(commands).build();
@@ -267,6 +268,10 @@ public class PlaybackService extends MediaLibraryService implements MediaLibrary
 
     private boolean isAppController(@NonNull MediaSession.ControllerInfo controller) {
         return clients.isSelf(controller, getPackageName());
+    }
+
+    private boolean isTrustedController(@NonNull MediaSession session, @NonNull MediaSession.ControllerInfo controller) {
+        return isAppController(controller) || session.isMediaNotificationController(controller) || session.isAutomotiveController(controller) || session.isAutoCompanionController(controller);
     }
 
     @NonNull

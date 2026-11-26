@@ -16,6 +16,7 @@ import com.pfpt.tv.impl.Diffable;
 import com.pfpt.tv.server.Server;
 import com.pfpt.tv.utils.UrlUtil;
 import com.pfpt.tv.utils.Util;
+import com.google.gson.JsonObject;
 import com.google.gson.annotations.SerializedName;
 
 import org.jupnp.model.meta.RemoteDevice;
@@ -176,6 +177,17 @@ public class Device implements Diffable<Device>, Comparable<Device> {
     @Override
     public int hashCode() {
         return Objects.hash(getUuid());
+    }
+
+    public String toPublicJson() {
+        JsonObject obj = new JsonObject();
+        if (id != null) obj.addProperty("id", id);
+        obj.addProperty("uuid", getUuid());
+        obj.addProperty("name", getName());
+        obj.addProperty("ip", getIp());
+        obj.addProperty("type", type);
+        obj.addProperty("time", time);
+        return obj.toString();
     }
 
     @NonNull

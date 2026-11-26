@@ -8,6 +8,7 @@ import com.pfpt.tv.server.Nano;
 import com.pfpt.tv.server.impl.Process;
 import com.pfpt.tv.utils.FileUtil;
 import com.pfpt.tv.utils.Formatters;
+import com.pfpt.tv.utils.StoragePaths;
 import com.github.catvod.utils.Path;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -44,9 +45,10 @@ public class Local implements Process {
 
     private Response getFile(Map<String, String> headers, String path) {
         try {
-            File file = Path.local(path.substring(5));
+            File file = StoragePaths.confine(Path.root(), path.substring(5));
+            if (file == null) return Nano.error(Status.FORBIDDEN, "Forbidden");
             if (file.isDirectory()) return getFolder(file);
-            if (file.isFile()) return getFile(headers, file, getMimeTypeForFile(path));
+            if (file.isFile()) return getFile(headers, file, getMimeTypeForFile(file.getName()));
             throw new FileNotFoundException();
         } catch (Exception e) {
             return Nano.error(e.getMessage());
@@ -54,26 +56,37 @@ public class Local implements Process {
     }
 
     private Response upload(Map<String, String> params, Map<String, String> files) {
-        String path = params.get("path");
+        File dir = StoragePaths.confine(Path.root(), params.get("path"));
+        if (dir == null) return Nano.error(Status.FORBIDDEN, "Forbidden");
         for (String k : files.keySet()) {
             String fn = params.get(k);
+            if (fn == null || fn.isBlank()) continue;
             File temp = new File(files.get(k));
-            if (fn.toLowerCase().endsWith(".zip")) FileUtil.zipDecompress(temp, Path.root(path));
-            else Path.copy(temp, Path.root(path, fn));
+            if (fn.toLowerCase().endsWith(".zip")) FileUtil.zipDecompress(temp, dir);
+            else {
+                File dest = StoragePaths.confine(dir, fn);
+                if (dest != null) Path.copy(temp, dest);
+            }
         }
         return Nano.ok();
     }
 
     private Response newFolder(Map<String, String> params) {
-        String path = params.get("path");
-        String name = params.get("name");
-        Path.root(path, name).mkdirs();
+        File dir = StoragePaths.confine(Path.root(), params.get("path"));
+        File created = dir == null ? null : StoragePaths.confine(dir, params.get("name"));
+        if (created == null) return Nano.error(Status.FORBIDDEN, "Forbidden");
+        created.mkdirs();
         return Nano.ok();
     }
 
     private Response delete(Map<String, String> params) {
-        String path = params.get("path");
-        Path.clear(Path.root(path));
+        File target = StoragePaths.confine(Path.root(), params.get("path"));
+        try {
+            if (target == null || target.equals(Path.root().getCanonicalFile())) return Nano.error(Status.FORBIDDEN, "Forbidden");
+        } catch (IOException e) {
+            return Nano.error(Status.FORBIDDEN, "Forbidden");
+        }
+        Path.clear(target);
         return Nano.ok();
     }
 

@@ -25,6 +25,8 @@ import com.pfpt.tv.bean.History;
 import com.pfpt.tv.bean.Keep;
 import com.pfpt.tv.databinding.DialogDeviceBinding;
 import com.pfpt.tv.impl.Callback;
+import com.pfpt.tv.server.LanToken;
+import com.pfpt.tv.server.Server;
 import com.pfpt.tv.setting.Setting;
 import com.pfpt.tv.ui.activity.ScanActivity;
 import com.pfpt.tv.ui.adapter.DeviceAdapter;
@@ -67,12 +69,14 @@ public class SyncDialog extends BaseBottomSheetDialog implements DeviceAdapter.O
     public SyncDialog history() {
         body.add("device", Device.get().toString());
         body.add("config", Config.vod().toString());
+        body.add("token", Server.get().getToken());
         body.add("targets", App.gson().toJson(History.get()));
         return type("history");
     }
 
     public SyncDialog keep() {
         body.add("device", Device.get().toString());
+        body.add("token", Server.get().getToken());
         body.add("targets", App.gson().toJson(Keep.getVod()));
         body.add("configs", App.gson().toJson(Config.findUrls()));
         return type("keep");
@@ -158,7 +162,7 @@ public class SyncDialog extends BaseBottomSheetDialog implements DeviceAdapter.O
 
     @Override
     public void onItemClick(Device item) {
-        OkHttp.newCall(client, String.format(Locale.getDefault(), "%s/action?do=sync&mode=%s&type=%s", item.getIp(), binding.mode.getTag().toString(), type), body.build()).enqueue(getCallback());
+        OkHttp.newCall(client, LanToken.action(item.getIp(), item.getUuid(), String.format(Locale.getDefault(), "/action?do=sync&mode=%s&type=%s", binding.mode.getTag().toString(), type)), body.build()).enqueue(getCallback());
     }
 
     @Override
@@ -167,7 +171,7 @@ public class SyncDialog extends BaseBottomSheetDialog implements DeviceAdapter.O
         if (mode.equals("0")) return false;
         if (mode.equals("2")) deleteLocal();
         String force = mode.equals("1") ? "&force=true" : "";
-        OkHttp.newCall(client, String.format(Locale.getDefault(), "%s/action?do=sync&mode=%s&type=%s%s", item.getIp(), mode, type, force), body.build()).enqueue(getCallback());
+        OkHttp.newCall(client, LanToken.action(item.getIp(), item.getUuid(), String.format(Locale.getDefault(), "/action?do=sync&mode=%s&type=%s%s", mode, type, force)), body.build()).enqueue(getCallback());
         return true;
     }
 

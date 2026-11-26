@@ -128,7 +128,7 @@ abstract class BaseConfig {
 
     private JsonArray fetch(String url) {
         try {
-            JsonElement parsed = Json.parse(OkHttp.string(UrlUtil.convert(url)));
+            JsonElement parsed = Json.parse(OkHttp.string(OkHttp.trusted(), UrlUtil.convert(url)));
             return parsed.isJsonArray() ? parsed.getAsJsonArray() : new JsonArray();
         } catch (Exception e) {
             return new JsonArray();

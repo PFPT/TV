@@ -242,10 +242,10 @@ public class Path {
             if (parent != null) mkdir(parent);
             if (file.exists()) clear(file);
             if (file.createNewFile()) Logger.t(TAG).d("Create:" + file);
-            file.setReadable(true);
-            file.setWritable(true);
-            file.setExecutable(true);
-            Shell.exec("chmod 777 " + file);
+            file.setReadable(true, false);
+            file.setWritable(true, true);
+            file.setExecutable(false, false);
+            Shell.exec("chmod", "644", file.getAbsolutePath());
             return file;
         } catch (IOException e) {
             return file;

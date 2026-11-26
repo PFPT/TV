@@ -89,7 +89,7 @@ public class JarLoader {
             if (loaders.containsKey(key)) return;
             String[] texts = jar.split(";md5;");
             String md5 = texts.length > 1 ? texts[1].trim() : "";
-            if (md5.startsWith("http")) md5 = OkHttp.string(md5).trim();
+            if (md5.startsWith("http")) md5 = OkHttp.string(OkHttp.trusted(), md5).trim();
             jar = texts[0];
             if (!md5.isEmpty() && Util.equals(jar, md5)) {
                 load(key, Path.jar(jar));
@@ -104,7 +104,7 @@ public class JarLoader {
     private File downloadJar(String jar) {
         File local = Path.jar(jar);
         try {
-            return Download.create(jar, local).get();
+            return Download.create(jar, local).trusted().get();
         } catch (Throwable e) {
             if (Path.exists(local)) return local;
             throw e;

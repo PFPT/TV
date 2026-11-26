@@ -1,10 +1,16 @@
 package com.pfpt.tv.ui.fragment;
 
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -19,6 +25,7 @@ import com.pfpt.tv.R;
 import com.pfpt.tv.api.config.VodConfig;
 import com.pfpt.tv.bean.Class;
 import com.pfpt.tv.bean.Config;
+import com.pfpt.tv.bean.Filter;
 import com.pfpt.tv.bean.Result;
 import com.pfpt.tv.bean.Site;
 import com.pfpt.tv.bean.Value;
@@ -35,21 +42,34 @@ import com.pfpt.tv.model.SiteViewModel;
 import com.pfpt.tv.ui.activity.HistoryActivity;
 import com.pfpt.tv.ui.activity.KeepActivity;
 import com.pfpt.tv.ui.activity.SearchActivity;
+import com.pfpt.tv.ui.activity.VideoActivity;
 import com.pfpt.tv.ui.adapter.TypeAdapter;
 import com.pfpt.tv.ui.base.BaseFragment;
-import com.pfpt.tv.ui.dialog.FilterDialog;
-import com.pfpt.tv.ui.dialog.HistoryDialog;
-import com.pfpt.tv.ui.dialog.LinkDialog;
-import com.pfpt.tv.ui.dialog.ReceiveDialog;
-import com.pfpt.tv.ui.dialog.SiteDialog;
+import com.pfpt.tv.ui.vod.VodReceiveSession;
+import com.pfpt.tv.ui.vod.compose.HomeFilterEvent;
+import com.pfpt.tv.ui.vod.compose.HomeFilterGroup;
+import com.pfpt.tv.ui.vod.compose.HomeLinkEvent;
+import com.pfpt.tv.ui.vod.compose.HomeLinkIds;
+import com.pfpt.tv.ui.vod.compose.HomeSheetController;
+import com.pfpt.tv.ui.vod.compose.HomeSheetKind;
+import com.pfpt.tv.ui.vod.compose.HomeSheetsKt;
+import com.pfpt.tv.ui.vod.compose.HomeSiteEvent;
+import com.pfpt.tv.ui.vod.compose.HomeSiteIds;
+import com.pfpt.tv.ui.vod.compose.HomeSiteInput;
+import com.pfpt.tv.ui.vod.compose.HomeSiteRow;
+import com.pfpt.tv.ui.vod.compose.VodReceiveState;
+import com.pfpt.tv.utils.FileChooser;
 import com.pfpt.tv.utils.ImgUtil;
 import com.pfpt.tv.utils.Notify;
 import com.pfpt.tv.utils.ResUtil;
+import com.pfpt.tv.utils.Sniffer;
+import com.pfpt.tv.utils.Util;
 
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -60,6 +80,35 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     private SiteViewModel mViewModel;
     private TypeAdapter mAdapter;
     private Result mResult;
+    private final HomeSheetController homeSheets = new HomeSheetController();
+    private final VodReceiveSession.Host homeReceiveHost = new VodReceiveSession.Host() {
+        @Override
+        public void show(VodReceiveState state) {
+            homeSheets.showReceive(state);
+        }
+
+        @Override
+        public void update(VodReceiveState state) {
+            homeSheets.updateReceive(state);
+        }
+
+        @Override
+        public boolean isOpen() {
+            return homeSheets.getKind() == HomeSheetKind.Receive;
+        }
+
+        @Override
+        public void dismiss() {
+            if (homeSheets.getKind() == HomeSheetKind.Receive) homeSheets.dismiss();
+        }
+    };
+    private VodReceiveSession homeReceive;
+    private List<Config> homeHistoryItems = List.of();
+    private final ActivityResultLauncher<Intent> linkFileLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) return;
+        VideoActivity.file(requireActivity(), FileChooser.getPathFromUri(result.getData().getData()));
+        homeSheets.dismiss();
+    });
 
     public static VodFragment newInstance() {
         return new VodFragment();
@@ -78,6 +127,12 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     }
 
     @Override
+    public void onAttach(@NonNull Context context) {
+        super.onAttach(context);
+        if (homeReceive == null) homeReceive = new VodReceiveSession((Activity) context, homeReceiveHost);
+    }
+
+    @Override
     protected ViewBinding getBinding(@NonNull LayoutInflater inflater, @Nullable ViewGroup container) {
         return mBinding = FragmentVodBinding.inflate(inflater, container, false);
     }
@@ -88,6 +143,7 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
         mBinding.title.setSelected(true);
         setRecyclerView();
         setViewModel();
+        HomeSheetsKt.setHomeSheetHost(mBinding.sheetCompose, homeSheets, this::onHomeSite, this::onHomeFilter, this::onHomeHistory, this::onHomeLink, homeReceive::play, homeReceive::dismiss);
         showProgress();
         setTitle();
         setLogo();
@@ -168,20 +224,38 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
     }
 
     private boolean onLink(View view) {
-        LinkDialog.show(this);
+        CharSequence clip = Util.getClipText();
+        String text = clip == null || TextUtils.isEmpty(clip) ? "" : Sniffer.getUrl(clip.toString());
+        bringHomeSheet();
+        homeSheets.showLink(text == null ? "" : text);
         return true;
     }
 
     private void onLogo(View view) {
-        HistoryDialog.create().vod().readOnly().show(this);
+        List<Config> items = Config.getAll(0);
+        if (items == null || items.isEmpty()) return;
+        List<String> names = new ArrayList<>();
+        for (Config item : items) names.add(item.getDesc() == null ? "" : item.getDesc());
+        List<String> shown = HomeSheetsKt.homeHistoryNames(names, true);
+        if (shown.isEmpty()) return;
+        homeHistoryItems = items;
+        bringHomeSheet();
+        homeSheets.showHistory(shown);
     }
 
     private void onSite(View view) {
-        SiteDialog.create().change().show(this);
+        List<HomeSiteRow> rows = readHomeSites();
+        if (rows.isEmpty()) return;
+        bringHomeSheet();
+        homeSheets.showSite(rows);
     }
 
     private void onFilter(View view) {
-        if (mAdapter.getItemCount() > 0) FilterDialog.create().filter(mAdapter.get(mBinding.pager.getCurrentItem()).getFilters()).show(this);
+        if (mAdapter.getItemCount() == 0) return;
+        List<Filter> filters = mAdapter.get(mBinding.pager.getCurrentItem()).getFilters();
+        if (filters == null || filters.isEmpty()) return;
+        bringHomeSheet();
+        homeSheets.showFilter(readHomeFilters(filters));
     }
 
     private boolean onMenuItemClick(MenuItem item) {
@@ -258,7 +332,98 @@ public class VodFragment extends BaseFragment implements ConfigListener, SiteLis
 
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void onCastEvent(CastEvent event) {
-        ReceiveDialog.create().event(event).show(this);
+        if (homeSheets.getKind() == HomeSheetKind.Receive) return;
+        if (event == null || event.history() == null || homeReceive == null) return;
+        bringHomeSheet();
+        homeReceive.show(event);
+    }
+
+    private void bringHomeSheet() {
+        mBinding.sheetCompose.bringToFront();
+        mBinding.sheetCompose.setVisibility(View.VISIBLE);
+    }
+
+    private List<HomeSiteRow> readHomeSites() {
+        List<HomeSiteInput> inputs = new ArrayList<>();
+        List<Site> sites = VodConfig.get().getSites();
+        if (sites == null) return List.of();
+        for (Site site : sites) {
+            if (site == null) continue;
+            inputs.add(new HomeSiteInput(site.getName() == null ? "" : site.getName(), site.isHide(), site.isSelected(), site.isChangeable()));
+        }
+        return HomeSheetsKt.homeSiteRows(inputs);
+    }
+
+    private List<Site> visibleHomeSites() {
+        List<Site> items = new ArrayList<>();
+        List<Site> sites = VodConfig.get().getSites();
+        if (sites == null) return items;
+        for (Site site : sites) if (site != null && !site.isHide()) items.add(site);
+        return items;
+    }
+
+    private void onHomeSite(HomeSiteEvent event) {
+        List<Site> items = visibleHomeSites();
+        int index = event.getIndex();
+        if (index < 0 || index >= items.size()) return;
+        if (event.getId() == HomeSiteIds.OPEN) {
+            setSite(items.get(index));
+            return;
+        }
+        if (event.getId() == HomeSiteIds.CHANGE) {
+            Site item = items.get(index);
+            item.setChangeable(!item.isChangeable()).save();
+            homeSheets.updateSite(readHomeSites());
+            return;
+        }
+        if (event.getId() != HomeSiteIds.CHANGE_ALL) return;
+        boolean next = !items.get(index).isChangeable();
+        for (Site site : items) site.setChangeable(next).save();
+        homeSheets.updateSite(readHomeSites());
+    }
+
+    private List<HomeFilterGroup> readHomeFilters(List<Filter> filters) {
+        List<HomeFilterGroup> groups = new ArrayList<>();
+        for (Filter filter : filters) {
+            List<String> labels = new ArrayList<>();
+            List<Boolean> selected = new ArrayList<>();
+            for (Value value : filter.getValue()) {
+                labels.add(value.getN() == null ? "" : value.getN());
+                selected.add(value.isSelected());
+            }
+            groups.add(new HomeFilterGroup(labels, HomeSheetsKt.firstSelected(selected)));
+        }
+        return groups;
+    }
+
+    private void onHomeFilter(HomeFilterEvent event) {
+        if (mAdapter.getItemCount() == 0) return;
+        List<Filter> filters = mAdapter.get(mBinding.pager.getCurrentItem()).getFilters();
+        int group = event.getGroup();
+        if (filters == null || group < 0 || group >= filters.size()) return;
+        List<Value> values = filters.get(group).getValue();
+        int index = event.getIndex();
+        if (index < 0 || index >= values.size()) return;
+        Value value = values.get(index);
+        for (Value item : values) item.setSelected(value);
+        setFilter(filters.get(group).getKey(), value);
+        homeSheets.updateFilter(readHomeFilters(filters));
+    }
+
+    private void onHomeHistory(int index) {
+        if (index < 0 || index >= homeHistoryItems.size()) return;
+        setConfig(homeHistoryItems.get(index));
+    }
+
+    private void onHomeLink(HomeLinkEvent event) {
+        if (event.getId() == HomeLinkIds.CHOOSE) {
+            FileChooser.from(linkFileLauncher).show();
+            return;
+        }
+        if (event.getId() != HomeLinkIds.PLAY) return;
+        String text = event.getText() == null ? "" : event.getText().trim();
+        if (HomeSheetsKt.homeLinkReady(text)) VideoActivity.start(requireActivity(), text);
+        homeSheets.dismiss();
     }
 
     @Override

@@ -81,6 +81,8 @@ enum class VodSheetKind {
     Offset,
     Cast,
     Receive,
+    DanmakuSearch,
+    DanmakuSetting,
 }
 
 data class VodDownloadConfirm(
@@ -201,6 +203,10 @@ class VodSheetController {
     var cast by mutableStateOf(VodCastState(title = "", names = emptyList(), hosts = emptyList()))
         private set
     var receive by mutableStateOf(VodReceiveState(name = "", from = "", pic = "", loading = false))
+        private set
+    var danmakuSearch by mutableStateOf(VodDanmakuSearchState(keyword = "", loading = false, names = emptyList(), selected = -1))
+        private set
+    var danmakuSetting by mutableStateOf(blankDanmakuSetting())
         private set
 
     fun showEpisodes(download: Boolean) {
@@ -341,6 +347,30 @@ class VodSheetController {
         receive = state
     }
 
+    fun showDanmakuSearch(state: VodDanmakuSearchState) {
+        download = null
+        info = null
+        danmakuSearch = state
+        kind = VodSheetKind.DanmakuSearch
+    }
+
+    fun updateDanmakuSearch(state: VodDanmakuSearchState) {
+        if (kind != VodSheetKind.DanmakuSearch) return
+        danmakuSearch = state
+    }
+
+    fun showDanmakuSetting(state: VodDanmakuSettingState) {
+        download = null
+        info = null
+        danmakuSetting = state
+        kind = VodSheetKind.DanmakuSetting
+    }
+
+    fun updateDanmakuSetting(state: VodDanmakuSettingState) {
+        if (kind != VodSheetKind.DanmakuSetting) return
+        danmakuSetting = state
+    }
+
     fun dismiss() {
         kind = VodSheetKind.None
         download = null
@@ -384,6 +414,9 @@ fun ComposeView.setVodSheetHost(
     onCastDismiss: Runnable,
     onReceive: VodReceiveAction,
     onReceiveDismiss: Runnable,
+    onDanmakuSearch: VodDanmakuSearchAction,
+    onDanmakuSearchDismiss: Runnable,
+    onDanmakuSetting: VodDanmakuSettingAction,
 ) {
     setContent {
         val ui by session.uiState.collectAsStateWithLifecycle()
@@ -495,6 +528,16 @@ fun ComposeView.setVodSheetHost(
                 state = controller.receive,
                 onPlay = { onReceive.onPlay() },
                 onDismiss = onReceiveDismiss::run,
+            )
+            VodSheetKind.DanmakuSearch -> DanmakuSearchSheet(
+                state = controller.danmakuSearch,
+                onEvent = { onDanmakuSearch.onEvent(it) },
+                onDismiss = onDanmakuSearchDismiss::run,
+            )
+            VodSheetKind.DanmakuSetting -> DanmakuSettingSheet(
+                state = controller.danmakuSetting,
+                onEvent = { onDanmakuSetting.onEvent(it) },
+                onDismiss = controller::dismiss,
             )
         }
     }

@@ -109,4 +109,11 @@
         app:tint="?attr/colorOnSecondaryContainer"
         tools:visibility="visible" />
 
+    <androidx.compose.ui.platform.ComposeView
+        android:id="@+id/sheetCompose"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:elevation="24dp"
+        android:visibility="gone" />
+
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

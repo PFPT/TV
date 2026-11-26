@@ -68,6 +68,7 @@ public class PlayerManager implements ParseCallback {
         this.pendingStartPositionMs = C.TIME_UNSET;
         this.danmakuConfig = DanmakuSetting.getConfig();
         this.danmakuEnabled = DanmakuSetting.isShow();
+        PlaybackSnapshot.publish(this);
     }
 
     public static MediaMetadata buildMetadata(String title, String artist, String artUri) {
@@ -81,6 +82,7 @@ public class PlayerManager implements ParseCallback {
         if (engine != null) engine.release();
         engine = null;
         player = null;
+        PlaybackSnapshot.clear();
     }
 
     public Player getPlayer() {
@@ -414,6 +416,7 @@ public class PlayerManager implements ParseCallback {
     private void setPlayer(Player player) {
         this.player = player;
         callback.onPlayerRebuild(player);
+        PlaybackSnapshot.publish(this);
     }
 
     public void browse(PlaySpec spec, long startPositionMs) {
@@ -534,6 +537,11 @@ public class PlayerManager implements ParseCallback {
         @Override
         public void onPlaybackStateChanged(int state) {
             if (state == Player.STATE_READY || state == Player.STATE_ENDED) App.removeCallbacks(runnable);
+        }
+
+        @Override
+        public void onEvents(@NonNull Player player, @NonNull Player.Events events) {
+            PlaybackSnapshot.publish(PlayerManager.this);
         }
 
         @Override

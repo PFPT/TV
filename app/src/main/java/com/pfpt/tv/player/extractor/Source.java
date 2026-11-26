@@ -60,6 +60,7 @@ public class Source {
                 Iterator<Episode> iterator = flag.getEpisodes().iterator();
                 while (iterator.hasNext()) addCallable(iterator, items);
                 for (Future<List<Episode>> future : executor.invokeAll(items, 30, TimeUnit.SECONDS)) {
+                    if (future.isCancelled()) continue;
                     try {
                         flag.getEpisodes().addAll(future.get());
                     } catch (CancellationException ignored) {

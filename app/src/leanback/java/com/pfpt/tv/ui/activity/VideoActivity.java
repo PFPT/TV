@@ -5,7 +5,6 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.drawable.Drawable;
-import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.text.style.ClickableSpan;
@@ -35,7 +34,6 @@ import com.pfpt.tv.App;
 import com.pfpt.tv.Constant;
 import com.pfpt.tv.R;
 import com.pfpt.tv.api.DanmakuApi;
-import com.pfpt.tv.api.SiteApi;
 import com.pfpt.tv.api.config.VodConfig;
 import com.pfpt.tv.bean.Danmaku;
 import com.pfpt.tv.bean.Episode;
@@ -72,6 +70,7 @@ import com.pfpt.tv.ui.dialog.PlayerEngineDialog;
 import com.pfpt.tv.ui.dialog.SubtitleDialog;
 import com.pfpt.tv.ui.dialog.TrackDialog;
 import com.pfpt.tv.playback.PlaybackAction;
+import com.pfpt.tv.playback.vod.VodLaunch;
 import com.pfpt.tv.playback.vod.VodPlaybackActivityAccess;
 import com.pfpt.tv.playback.vod.VodPlaybackController;
 import com.pfpt.tv.playback.vod.VodPlaybackMedia;
@@ -79,7 +78,6 @@ import com.pfpt.tv.player.PlayerManager;
 import com.pfpt.tv.playback.vod.session.VodSessionViewModel;
 import com.pfpt.tv.playback.vod.session.VodUiState;
 import com.pfpt.tv.utils.Clock;
-import com.pfpt.tv.utils.FileChooser;
 import com.pfpt.tv.utils.ImgUtil;
 import com.pfpt.tv.utils.KeyUtil;
 import com.pfpt.tv.utils.Notify;
@@ -88,14 +86,12 @@ import com.pfpt.tv.utils.ResUtil;
 import com.pfpt.tv.utils.Sniffer;
 import com.pfpt.tv.utils.Task;
 import com.pfpt.tv.utils.Traffic;
-import com.pfpt.tv.utils.UrlUtil;
 import com.pfpt.tv.utils.Util;
 import com.github.bassaer.library.MDColor;
 
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -126,84 +122,74 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     private Runnable mR3;
     Runnable mR4;
     Clock mClock;
+    private final LeanbackSpanControls spanControls = new LeanbackSpanControls();
+    private final LeanbackVodCatalog catalog = new LeanbackVodCatalog(new CatalogHost());
     private View mFocus1;
     private View mFocus2;
 
     public static void push(FragmentActivity activity, String text) {
-        Uri uri = UrlUtil.uri(text);
-        if (FileChooser.isValid(activity, uri)) file(activity, FileChooser.getPathFromUri(uri));
-        else start(activity, Sniffer.getUrl(text));
+        VodLaunch.push(activity, VideoActivity.class, text);
     }
 
     public static void file(FragmentActivity activity, String path) {
-        if (TextUtils.isEmpty(path)) return;
-        String name = new File(path).getName();
-        start(activity, SiteApi.PUSH, "file://" + path, name);
+        VodLaunch.file(activity, VideoActivity.class, path);
     }
 
     public static void cast(Activity activity, History history) {
-        start(activity, history.getSiteKey(), history.getVodId(), history.getVodName(), history.getVodPic(), null, false, true);
+        VodLaunch.cast(activity, VideoActivity.class, history);
     }
 
     public static void collect(Activity activity, String key, String id, String name, String pic) {
-        start(activity, key, id, name, pic, null, true, false);
+        VodLaunch.collect(activity, VideoActivity.class, key, id, name, pic);
     }
 
     public static void start(Activity activity, String url) {
-        start(activity, SiteApi.PUSH, url, url);
+        VodLaunch.start(activity, VideoActivity.class, url);
     }
 
     public static void start(Activity activity, String key, String id, String name) {
-        start(activity, key, id, name, null);
+        VodLaunch.start(activity, VideoActivity.class, key, id, name);
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic) {
-        start(activity, key, id, name, pic, null);
+        VodLaunch.start(activity, VideoActivity.class, key, id, name, pic);
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark) {
-        start(activity, key, id, name, pic, mark, false, false);
+        VodLaunch.start(activity, VideoActivity.class, key, id, name, pic, mark);
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect, boolean cast) {
-        Intent intent = new Intent(activity, VideoActivity.class);
-        intent.putExtra("collect", collect);
-        intent.putExtra("cast", cast);
-        intent.putExtra("mark", mark);
-        intent.putExtra("name", name);
-        intent.putExtra("pic", pic);
-        intent.putExtra("key", key);
-        intent.putExtra("id", id);
-        activity.startActivity(intent);
+        VodLaunch.start(activity, VideoActivity.class, key, id, name, pic, mark, collect, cast);
     }
 
     private boolean isCast() {
-        return getIntent().getBooleanExtra("cast", false);
+        return VodLaunch.flag(getIntent(), "cast");
     }
 
     @Override
     public String getName() {
-        return Objects.toString(getIntent().getStringExtra("name"), "");
+        return VodLaunch.text(getIntent(), "name");
     }
 
     @Override
     public String getPic() {
-        return Objects.toString(getIntent().getStringExtra("pic"), "");
+        return VodLaunch.text(getIntent(), "pic");
     }
 
     @Override
     public String getMark() {
-        return Objects.toString(getIntent().getStringExtra("mark"), "");
+        return VodLaunch.text(getIntent(), "mark");
     }
 
     @Override
     public String getKey() {
-        return Objects.toString(getIntent().getStringExtra("key"), "");
+        return VodLaunch.text(getIntent(), "key");
     }
 
     @Override
     public String getId() {
-        return Objects.toString(getIntent().getStringExtra("id"), "");
+        return VodLaunch.text(getIntent(), "id");
     }
 
     @Override
@@ -408,24 +394,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void setRecyclerView() {
-        mBinding.flag.setHorizontalSpacing(ResUtil.dp2px(8));
-        mBinding.flag.setRowHeight(ViewGroup.LayoutParams.WRAP_CONTENT);
-        mBinding.flag.setAdapter(mFlagAdapter = new FlagAdapter(this));
-        mBinding.episode.setHorizontalSpacing(ResUtil.dp2px(8));
-        mBinding.episode.setRowHeight(ViewGroup.LayoutParams.WRAP_CONTENT);
-        mBinding.episode.setAdapter(mEpisodeAdapter = new EpisodeAdapter(this));
-        mBinding.quality.setHorizontalSpacing(ResUtil.dp2px(8));
-        mBinding.quality.setRowHeight(ViewGroup.LayoutParams.WRAP_CONTENT);
-        mBinding.quality.setAdapter(mQualityAdapter = new QualityAdapter(this));
-        mBinding.array.setHorizontalSpacing(ResUtil.dp2px(8));
-        mBinding.array.setRowHeight(ViewGroup.LayoutParams.WRAP_CONTENT);
-        mBinding.array.setAdapter(mArrayAdapter = new ArrayAdapter(this));
-        mBinding.part.setHorizontalSpacing(ResUtil.dp2px(8));
-        mBinding.part.setRowHeight(ViewGroup.LayoutParams.WRAP_CONTENT);
-        mBinding.part.setAdapter(mPartAdapter = new PartAdapter(item -> mVod.search(item, false)));
-        mBinding.quick.setHorizontalSpacing(ResUtil.dp2px(8));
-        mBinding.quick.setRowHeight(ViewGroup.LayoutParams.WRAP_CONTENT);
-        mBinding.quick.setAdapter(mQuickAdapter = new QuickAdapter(this));
+        catalog.bind();
     }
 
     private void setVideoView() {
@@ -515,64 +484,31 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
 
     @Override
     public void onItemClick(Flag item) {
-        mVod.selectFlag(item);
+        catalog.onFlag(item);
     }
 
     @Override
     public void setEpisodeAdapter(List<Episode> items) {
-        mBinding.episode.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
-        mEpisodeAdapter.addAll(items);
-        setArrayAdapter(items.size());
-        setR2Callback();
+        catalog.setEpisodes(items);
     }
 
     @Override
     public void onItemClick(Episode item) {
-        if (shouldEnterFullscreen(item)) return;
-        mVod.selectEpisode(item);
+        catalog.onEpisode(item);
     }
 
     @Override
     public void setQualityVisible(boolean visible) {
-        mBinding.quality.setVisibility(visible ? View.VISIBLE : View.GONE);
-        setR2Callback();
+        catalog.setQualityVisible(visible);
     }
 
     @Override
     public void onItemClick(Result result) {
-        mVod.selectQuality(result);
-    }
-
-    private void setArrayAdapter(int size) {
-        List<String> items = new ArrayList<>();
-        items.add(getString(R.string.play_reverse));
-        items.add(getString(mHistory.getRevPlayText()));
-        mBinding.array.setVisibility(size > 1 ? View.VISIBLE : View.GONE);
-        if (mHistory.isRevSort()) for (int i = size; i > 0; i -= 20) items.add(i + "-" + Math.max(i - 19, 1));
-        else for (int i = 0; i < size; i += 20) items.add((i + 1) + "-" + Math.min(i + 20, size));
-        mArrayAdapter.addAll(items);
-    }
-
-    private int findFocusDown(int index) {
-        List<Integer> orders = Arrays.asList(R.id.flag, R.id.quality, R.id.episode, R.id.array, R.id.part, R.id.quick);
-        for (int i = 0; i < orders.size(); i++) if (i > index) if (isVisible(findViewById(orders.get(i)))) return orders.get(i);
-        return 0;
-    }
-
-    private int findFocusUp(int index) {
-        List<Integer> orders = Arrays.asList(R.id.flag, R.id.quality, R.id.episode, R.id.array, R.id.part, R.id.quick);
-        for (int i = orders.size() - 1; i >= 0; i--) if (i < index) if (isVisible(findViewById(orders.get(i)))) return orders.get(i);
-        return 0;
+        catalog.onQuality(result);
     }
 
     private void updateFocus() {
-        mPartAdapter.setNextFocusUp(findFocusUp(4));
-        mEpisodeAdapter.setNextFocusUp(findFocusUp(2));
-        mFlagAdapter.setNextFocusDown(findFocusDown(0));
-        mEpisodeAdapter.setNextFocusDown(findFocusDown(2));
-        notifyItemChanged(mBinding.episode, mEpisodeAdapter);
-        notifyItemChanged(mBinding.part, mPartAdapter);
-        notifyItemChanged(mBinding.flag, mFlagAdapter);
+        catalog.updateFocus();
     }
 
     @Override
@@ -586,12 +522,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         mVod.setRevPlay(!mHistory.isRevPlay());
         view.setText(mHistory.getRevPlayText());
         Notify.show(mHistory.getRevPlayHint());
-    }
-
-    private boolean shouldEnterFullscreen(Episode item) {
-        boolean enter = !isFullscreen() && item.isSelected();
-        if (enter) enterFullscreen();
-        return enter;
     }
 
     private void enterFullscreen() {
@@ -647,27 +577,15 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void checkNext() {
-        checkNext(true);
+        catalog.checkNext();
     }
 
     private void checkNext(boolean notify) {
-        mVod.nextEpisode(notify);
+        catalog.checkNext(notify);
     }
 
     private void checkPrev() {
-        mVod.prevEpisode(true);
-    }
-
-    private void onNext(boolean notify) {
-        Episode item = mEpisodeAdapter.getNext();
-        if (!item.isSelected()) onItemClick(item);
-        else if (notify) Notify.show(mHistory.isRevPlay() ? R.string.error_play_prev : R.string.error_play_next);
-    }
-
-    private void onPrev(boolean notify) {
-        Episode item = mEpisodeAdapter.getPrev();
-        if (!item.isSelected()) onItemClick(item);
-        else if (notify) Notify.show(mHistory.isRevPlay() ? R.string.error_play_next : R.string.error_play_prev);
+        catalog.checkPrev();
     }
 
     private void onScale() {
@@ -677,15 +595,15 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void onSpeed() {
-        mVod.setSpeed(PlaybackAction.addSpeed(player(), mBinding.control.action.speed));
+        spanControls.speed(mVod, player(), mBinding.control.action.speed);
     }
 
     private void onSpeedAdd() {
-        mVod.setSpeed(PlaybackAction.addSpeed(player(), mBinding.control.action.speed, 0.25f));
+        spanControls.speedAdd(mVod, player(), mBinding.control.action.speed);
     }
 
     private void onSpeedSub() {
-        mVod.setSpeed(PlaybackAction.subSpeed(player(), mBinding.control.action.speed, 0.25f));
+        spanControls.speedSub(mVod, player(), mBinding.control.action.speed);
     }
 
     private void onReset() {
@@ -706,51 +624,37 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void onOpening() {
-        long position = player().getPosition();
-        long duration = player().getDuration();
-        if (player().canSetOpening(position, duration)) setOpening(position);
+        spanControls.opening(mVod, player(), mHistory, mBinding.control.action.opening);
     }
 
     private void onOpeningAdd() {
-        setOpening(Math.max(0, Math.max(0, mHistory.getOpening()) + 1000));
+        spanControls.openingAdd(mVod, mHistory, mBinding.control.action.opening);
     }
 
     private void onOpeningSub() {
-        setOpening(Math.max(0, Math.max(0, mHistory.getOpening()) - 1000));
+        spanControls.openingSub(mVod, mHistory, mBinding.control.action.opening);
     }
 
     private boolean onOpeningReset() {
-        setOpening(0);
+        spanControls.openingReset(mVod, mHistory, mBinding.control.action.opening);
         return true;
-    }
-
-    private void setOpening(long opening) {
-        mVod.setOpening(opening);
-        mBinding.control.action.opening.setText(opening <= 0 ? getString(R.string.play_op) : Util.timeMs(mHistory.getOpening()));
     }
 
     private void onEnding() {
-        long position = player().getPosition();
-        long duration = player().getDuration();
-        if (player().canSetEnding(position, duration)) setEnding(duration - position);
+        spanControls.ending(mVod, player(), mHistory, mBinding.control.action.ending);
     }
 
     private void onEndingAdd() {
-        setEnding(Math.max(0, Math.max(0, mHistory.getEnding()) + 1000));
+        spanControls.endingAdd(mVod, mHistory, mBinding.control.action.ending);
     }
 
     private void onEndingSub() {
-        setEnding(Math.max(0, Math.max(0, mHistory.getEnding()) - 1000));
+        spanControls.endingSub(mVod, mHistory, mBinding.control.action.ending);
     }
 
     private boolean onEndingReset() {
-        setEnding(0);
+        spanControls.endingReset(mVod, mHistory, mBinding.control.action.ending);
         return true;
-    }
-
-    private void setEnding(long ending) {
-        mVod.setEnding(ending);
-        mBinding.control.action.ending.setText(ending <= 0 ? getString(R.string.play_ed) : Util.timeMs(mHistory.getEnding()));
     }
 
     private void onChoose() {
@@ -1250,4 +1154,142 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         App.removeCallbacks(mR1, mR2, mR3, mR4);
         super.onDestroy();
     }
+
+    private final class CatalogHost implements LeanbackVodCatalog.Host {
+        @Override
+        public ActivityVideoBinding binding() {
+            return mBinding;
+        }
+
+        @Override
+        public void setFlagAdapter(FlagAdapter adapter) {
+            mFlagAdapter = adapter;
+        }
+
+        @Override
+        public FlagAdapter flagAdapter() {
+            return mFlagAdapter;
+        }
+
+        @Override
+        public void setEpisodeAdapter(EpisodeAdapter adapter) {
+            mEpisodeAdapter = adapter;
+        }
+
+        @Override
+        public EpisodeAdapter episodeAdapter() {
+            return mEpisodeAdapter;
+        }
+
+        @Override
+        public void setQualityAdapter(QualityAdapter adapter) {
+            mQualityAdapter = adapter;
+        }
+
+        @Override
+        public QualityAdapter qualityAdapter() {
+            return mQualityAdapter;
+        }
+
+        @Override
+        public void setArrayAdapter(ArrayAdapter adapter) {
+            mArrayAdapter = adapter;
+        }
+
+        @Override
+        public ArrayAdapter arrayAdapter() {
+            return mArrayAdapter;
+        }
+
+        @Override
+        public void setPartAdapter(PartAdapter adapter) {
+            mPartAdapter = adapter;
+        }
+
+        @Override
+        public PartAdapter partAdapter() {
+            return mPartAdapter;
+        }
+
+        @Override
+        public void setQuickAdapter(QuickAdapter adapter) {
+            mQuickAdapter = adapter;
+        }
+
+        @Override
+        public VodPlaybackController vod() {
+            return mVod;
+        }
+
+        @Override
+        public History history() {
+            return mHistory;
+        }
+
+        @Override
+        public boolean fullscreen() {
+            return isFullscreen();
+        }
+
+        @Override
+        public void enterFullscreen() {
+            VideoActivity.this.enterFullscreen();
+        }
+
+        @Override
+        public boolean visible(View view) {
+            return isVisible(view);
+        }
+
+        @Override
+        public View find(int id) {
+            return findViewById(id);
+        }
+
+        @Override
+        public void notifyChanged(RecyclerView view, RecyclerView.Adapter<?> adapter) {
+            notifyItemChanged(view, adapter);
+        }
+
+        @Override
+        public void postFocus() {
+            setR2Callback();
+        }
+
+        @Override
+        public String text(int resId) {
+            return getString(resId);
+        }
+
+        @Override
+        public FlagAdapter.OnClickListener flagClicks() {
+            return VideoActivity.this;
+        }
+
+        @Override
+        public EpisodeAdapter.OnClickListener episodeClicks() {
+            return VideoActivity.this;
+        }
+
+        @Override
+        public QualityAdapter.OnClickListener qualityClicks() {
+            return VideoActivity.this;
+        }
+
+        @Override
+        public ArrayAdapter.OnClickListener arrayClicks() {
+            return VideoActivity.this;
+        }
+
+        @Override
+        public QuickAdapter.OnClickListener quickClicks() {
+            return VideoActivity.this;
+        }
+
+        @Override
+        public void show(int resId) {
+            Notify.show(resId);
+        }
+    }
+
 }

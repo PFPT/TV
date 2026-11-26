@@ -4,17 +4,15 @@ import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.media.AudioManager;
+import android.content.res.Resources;
 import android.content.res.Configuration;
 import android.graphics.drawable.Drawable;
-import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.text.style.ClickableSpan;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.RelativeLayout;
 
@@ -34,6 +32,7 @@ import androidx.media3.common.MediaEdition;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.Player;
+import androidx.media3.session.MediaController;
 import androidx.media3.common.Tracks;
 import androidx.media3.common.VideoSize;
 import androidx.media3.ui.DefaultTrackNameProvider;
@@ -50,6 +49,7 @@ import com.pfpt.tv.Constant;
 import com.pfpt.tv.R;
 import com.pfpt.tv.api.DanmakuApi;
 import com.pfpt.tv.api.SiteApi;
+import com.pfpt.tv.playback.vod.VodLaunch;
 import com.pfpt.tv.api.config.VodConfig;
 import com.pfpt.tv.bean.CastVideo;
 import com.pfpt.tv.bean.Config;
@@ -78,7 +78,6 @@ import com.pfpt.tv.player.parse.ParseJob;
 import com.pfpt.tv.player.util.PlayerHelper;
 import com.pfpt.tv.service.PlaybackService;
 import com.pfpt.tv.setting.DanmakuSetting;
-import com.pfpt.tv.setting.LiveSetting;
 import com.pfpt.tv.setting.PlayerSetting;
 import com.pfpt.tv.server.Server;
 import com.pfpt.tv.ui.activity.ScanActivity;
@@ -102,6 +101,7 @@ import com.pfpt.tv.playback.vod.session.DownloadResolveOutcome;
 import com.pfpt.tv.playback.vod.session.VodDownloadResolver;
 import com.pfpt.tv.playback.vod.session.VodSessionViewModel;
 import com.pfpt.tv.ui.vod.VodCastSession;
+import com.pfpt.tv.ui.vod.VodDanmakuPrefs;
 import com.pfpt.tv.ui.vod.VodReceiveSession;
 import com.pfpt.tv.ui.vod.compose.VodComposeHostKt;
 import com.pfpt.tv.ui.vod.compose.VodControlConfig;
@@ -135,8 +135,6 @@ import com.pfpt.tv.ui.vod.compose.VodDanmakuSearchSheetKt;
 import com.pfpt.tv.ui.vod.compose.VodDanmakuSearchState;
 import com.pfpt.tv.ui.vod.compose.VodDanmakuSettingEvent;
 import com.pfpt.tv.ui.vod.compose.VodDanmakuSettingIds;
-import com.pfpt.tv.ui.vod.compose.VodDanmakuSettingKeys;
-import com.pfpt.tv.ui.vod.compose.VodDanmakuSettingState;
 import com.pfpt.tv.ui.vod.compose.VodDanmakuSheetKt;
 import com.pfpt.tv.ui.vod.compose.VodDanmakuState;
 import com.pfpt.tv.ui.vod.compose.VodEditionSheetKt;
@@ -165,7 +163,6 @@ import com.pfpt.tv.utils.Sniffer;
 import com.pfpt.tv.utils.Task;
 import com.pfpt.tv.utils.Timer;
 import com.pfpt.tv.utils.Traffic;
-import com.pfpt.tv.utils.UrlUtil;
 import com.pfpt.tv.utils.Util;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 
@@ -175,7 +172,6 @@ import org.greenrobot.eventbus.ThreadMode;
 import com.github.catvod.net.OkHttp;
 import com.github.catvod.utils.Path;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -199,8 +195,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     private Observer<Result> mObserveDetail;
     private Observer<Result> mObservePlayer;
     private Observer<Result> mObserveSearch;
-    private ParseJob downloadParse;
-    private int downloadSeq;
     private VodPlaybackController mVod;
     VideoViewModel mViewModel;
     private VodSessionViewModel mSession;
@@ -237,7 +231,6 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
             if (sheetController.getKind() == VodSheetKind.Receive) sheetController.dismiss();
         }
     });
-    private int trackSheetType;
     private final ActivityResultLauncher<Intent> trackSubtitleLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
         if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) return;
         if (player() == null) return;
@@ -254,45 +247,9 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) return;
         castSession.scan(result.getData().getStringExtra("address"));
     });
-    private final List<Danmaku> danmakuSearchItems = new ArrayList<>();
-    private final okhttp3.Callback danmakuSearchCallback = new okhttp3.Callback() {
-        @Override
-        public void onFailure(@NonNull Call call, @NonNull IOException e) {
-            App.post(() -> failDanmakuSearch(e));
-        }
-
-        @Override
-        public void onResponse(@NonNull Call call, @NonNull Response response) {
-            try (Response res = response) {
-                String body = res.body() == null ? "" : res.body().string();
-                List<Danmaku> items = Danmaku.arrayFrom(body);
-                if (items.isEmpty()) throw new Exception(ResUtil.getString(R.string.error_empty));
-                App.post(() -> showDanmakuSearchResult(items));
-            } catch (Exception e) {
-                App.post(() -> failDanmakuSearch(e));
-            }
-        }
-    };
-    private final Timer.Callback timerSheetCallback = new Timer.Callback() {
-        @Override
-        public void onTick(long tick) {
-            sheetController.updateTimer(readTimerState());
-        }
-
-        @Override
-        public void onFinish() {
-            dismissTimerSheet();
-        }
-    };
-    private boolean gestureBrightArmed;
-    private float gestureBright;
-    private boolean gestureVolumeArmed;
-    private float gestureVolume;
-    private int gestureVolumeMax;
-    private boolean gestureSeeking;
-    private long gestureSeekMs;
-    private boolean gestureAnimating;
-    private AudioManager gestureAudio;
+    private final MobileVodSheets sheets = new MobileVodSheets(new SheetHost());
+    private final MobileVodChrome chrome = new MobileVodChrome(new ChromeHost());
+    private final MobileVodGesture gestures = new MobileVodGesture();
     private Runnable mR1;
     private Runnable mR2;
     private Runnable mR3;
@@ -301,75 +258,64 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     private PiP mPiP;
 
     public static void push(FragmentActivity activity, String text) {
-        Uri uri = UrlUtil.uri(text);
-        if (FileChooser.isValid(activity, uri)) file(activity, FileChooser.getPathFromUri(uri));
-        else start(activity, Sniffer.getUrl(text));
+        VodLaunch.push(activity, VideoActivity.class, text);
     }
 
     public static void file(FragmentActivity activity, String path) {
-        if (TextUtils.isEmpty(path)) return;
-        String name = new File(path).getName();
-        start(activity, SiteApi.PUSH, "file://" + path, name);
+        VodLaunch.file(activity, VideoActivity.class, path);
     }
 
     public static void cast(Activity activity, History history) {
-        start(activity, history.getSiteKey(), history.getVodId(), history.getVodName(), history.getVodPic());
+        VodLaunch.start(activity, VideoActivity.class, history.getSiteKey(), history.getVodId(), history.getVodName(), history.getVodPic());
     }
 
     public static void collect(Activity activity, String key, String id, String name, String pic) {
-        start(activity, key, id, name, pic, null, true);
+        VodLaunch.collect(activity, VideoActivity.class, key, id, name, pic);
     }
 
     public static void start(Activity activity, String url) {
-        start(activity, SiteApi.PUSH, url, url);
+        VodLaunch.start(activity, VideoActivity.class, url);
     }
 
     public static void start(Activity activity, String key, String id, String name) {
-        start(activity, key, id, name, null);
+        VodLaunch.start(activity, VideoActivity.class, key, id, name);
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic) {
-        start(activity, key, id, name, pic, null);
+        VodLaunch.start(activity, VideoActivity.class, key, id, name, pic);
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark) {
-        start(activity, key, id, name, pic, mark, false);
+        VodLaunch.start(activity, VideoActivity.class, key, id, name, pic, mark);
     }
 
     public static void start(Activity activity, String key, String id, String name, String pic, String mark, boolean collect) {
-        Intent intent = new Intent(activity, VideoActivity.class);
-        intent.putExtra("collect", collect);
-        intent.putExtra("mark", mark);
-        intent.putExtra("name", name);
-        intent.putExtra("pic", pic);
-        intent.putExtra("key", key);
-        intent.putExtra("id", id);
-        activity.startActivity(intent);
+        VodLaunch.start(activity, VideoActivity.class, key, id, name, pic, mark, collect, false);
     }
 
     @Override
     public String getName() {
-        return Objects.toString(getIntent().getStringExtra("name"), "");
+        return VodLaunch.text(getIntent(), "name");
     }
 
     @Override
     public String getPic() {
-        return Objects.toString(getIntent().getStringExtra("pic"), "");
+        return VodLaunch.text(getIntent(), "pic");
     }
 
     @Override
     public String getMark() {
-        return Objects.toString(getIntent().getStringExtra("mark"), "");
+        return VodLaunch.text(getIntent(), "mark");
     }
 
     @Override
     public String getKey() {
-        return Objects.toString(getIntent().getStringExtra("key"), "");
+        return VodLaunch.text(getIntent(), "key");
     }
 
     @Override
     public String getId() {
-        return Objects.toString(getIntent().getStringExtra("id"), "");
+        return VodLaunch.text(getIntent(), "id");
     }
 
     @Override
@@ -745,6 +691,11 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         mVod.search(name, false);
     }
 
+    private void ensureSheetHost() {
+        mBinding.sheetCompose.bringToFront();
+        mBinding.sheetCompose.setVisibility(View.VISIBLE);
+    }
+
     private void onMore() {
         syncCatalog();
         ensureSheetHost();
@@ -811,159 +762,19 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void onSetting() {
-        ensureSheetHost();
-        boolean showText = player() != null && (player().haveTrack(C.TRACK_TYPE_TEXT) || player().isVod());
-        boolean showAudio = player() != null && player().haveTrack(C.TRACK_TYPE_AUDIO);
-        boolean showVideo = player() != null && player().haveTrack(C.TRACK_TYPE_VIDEO);
-        boolean showDanmaku = player() != null && player().haveDanmaku();
-        boolean showSpeed = player() != null && player().isVod();
-        String speedLabel = player() != null ? player().getSpeedText() : "";
-        String[] scales = ResUtil.getStringArray(R.array.select_scale);
-        int scale = getScale();
-        String scaleLabel = scale >= 0 && scale < scales.length ? scales[scale] : getString(R.string.play_scale);
-        String decodeLabel = player() != null ? player().getDecodeText() : getString(R.string.play_decode);
-        boolean repeatOn = player() != null && player().isRepeatOne();
-        sheetController.showControlMore(new VodControlMoreVisibility(
-                showText, showAudio, showVideo, showDanmaku, showSpeed, speedLabel,
-                scaleLabel, decodeLabel, openingLabel(), endingLabel(), repeatOn));
-    }
-
-    private void onAllSettings() {
-        if (player() == null) return;
-        ensureSheetHost();
-        sheetController.showControlConfig(readControlConfig());
-    }
-
-    private VodControlConfig readControlConfig() {
-        List<String> names = new ArrayList<>();
-        int parseIndex = -1;
-        List<Parse> parses = VodConfig.get().getParses();
-        for (int i = 0; i < parses.size(); i++) {
-            Parse item = parses.get(i);
-            names.add(item.getName() == null ? "" : item.getName());
-            if (item.isSelected()) parseIndex = i;
-        }
-        boolean showText = player().haveTrack(C.TRACK_TYPE_TEXT) || player().isVod();
-        boolean showAudio = player().haveTrack(C.TRACK_TYPE_AUDIO);
-        boolean showVideo = player().haveTrack(C.TRACK_TYPE_VIDEO);
-        return VodControlConfigSheetKt.sanitizeVodControlConfig(new VodControlConfig(
-                player().getSpeed(),
-                isUseParse(),
-                names,
-                parseIndex,
-                Arrays.asList(ResUtil.getStringArray(R.array.select_scale)),
-                getScale(),
-                PlaybackAction.getEngineText(player()),
-                player().getDecodeText(),
-                openingLabel(),
-                endingLabel(),
-                player().haveEdition(),
-                player().haveChapter(),
-                showText,
-                showAudio,
-                showVideo,
-                false,
-                DanmakuSetting.isLoad(),
-                player().isRepeatOne(),
-                Timer.get().isRunning()
-        ));
+        sheets.onSetting();
     }
 
     private void onSheetControlConfig(VodControlConfigEvent event) {
-        int id = event.getId();
-        if (id == VodControlConfigIds.TIMER) {
-            showTimerDialog();
-            return;
-        }
-        if (player() == null) return;
-        if (id == VodControlConfigIds.SPEED) {
-            onSpeedChanged(event.getSpeed());
-            sheetController.updateControlConfig(readControlConfig());
-        } else if (id == VodControlConfigIds.PARSE) {
-            List<Parse> parses = VodConfig.get().getParses();
-            int index = event.getIndex();
-            if (index < 0 || index >= parses.size()) return;
-            onParse(parses.get(index));
-            sheetController.updateControlConfig(readControlConfig());
-        } else if (id == VodControlConfigIds.SCALE) {
-            String[] scales = ResUtil.getStringArray(R.array.select_scale);
-            int index = event.getIndex();
-            if (index < 0 || index >= scales.length) return;
-            onScale(index);
-            sheetController.updateControlConfig(readControlConfig());
-        } else if (id == VodControlConfigIds.DECODE) {
-            onDecode();
-            sheetController.updateControlConfig(readControlConfig());
-        } else if (id == VodControlConfigIds.REPEAT) {
-            onRepeat();
-            sheetController.updateControlConfig(readControlConfig());
-        } else if (id == VodControlConfigIds.OPENING) {
-            onOpening();
-            sheetController.updateControlConfig(readControlConfig());
-        } else if (id == VodControlConfigIds.OPENING_RESET) {
-            onOpeningReset();
-            sheetController.updateControlConfig(readControlConfig());
-        } else if (id == VodControlConfigIds.ENDING) {
-            onEnding();
-            sheetController.updateControlConfig(readControlConfig());
-        } else if (id == VodControlConfigIds.ENDING_RESET) {
-            onEndingReset();
-            sheetController.updateControlConfig(readControlConfig());
-        } else if (id == VodControlConfigIds.PLAYER) {
-            onChoose();
-        } else if (id == VodControlConfigIds.EDITION) {
-            onEdition();
-        } else if (id == VodControlConfigIds.CHAPTER) {
-            onChapter();
-        } else if (id == VodControlConfigIds.TEXT) {
-            onTrack(C.TRACK_TYPE_TEXT);
-        } else if (id == VodControlConfigIds.AUDIO) {
-            onTrack(C.TRACK_TYPE_AUDIO);
-        } else if (id == VodControlConfigIds.VIDEO) {
-            onTrack(C.TRACK_TYPE_VIDEO);
-        } else if (id == VodControlConfigIds.DANMAKU) {
-            onDanmaku();
-        }
-    }
-
-    private void showTimerDialog() {
-        ensureSheetHost();
-        Timer.get().setCallback(timerSheetCallback);
-        sheetController.showTimer(readTimerState());
-    }
-
-    private VodTimerState readTimerState() {
-        boolean running = Timer.get().isRunning();
-        String label = "";
-        if (running) {
-            StringBuilder builder = new StringBuilder();
-            Formatter formatter = new Formatter(builder, Locale.getDefault());
-            label = Util.format(builder, formatter, Timer.get().getTick());
-        }
-        return new VodTimerState(running, label);
+        sheets.onSheetControlConfig(event);
     }
 
     private void onTimerSheetEvent(VodTimerEvent event) {
-        int id = event.getId();
-        if (id == VodTimerIds.DELAY) {
-            Timer.get().delay();
-            return;
-        }
-        if (id == VodTimerIds.CANCEL) {
-            Timer.get().reset();
-            dismissTimerSheet();
-            return;
-        }
-        if (id != VodTimerIds.MINUTES) return;
-        int minutes = event.getMinutes();
-        if (minutes != 5 && minutes != 15 && minutes != 30 && minutes != 60) return;
-        Timer.get().set(TimeUnit.MINUTES.toMillis(minutes));
-        dismissTimerSheet();
+        sheets.onTimerSheetEvent(event);
     }
 
     private void dismissTimerSheet() {
-        Timer.get().setCallback(null);
-        sheetController.dismiss();
+        sheets.dismissTimerSheet();
     }
 
     private void onLock() {
@@ -980,364 +791,55 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     public void onTrack(int type) {
-        if (player() == null) return;
-        if (type != C.TRACK_TYPE_AUDIO && type != C.TRACK_TYPE_VIDEO && type != C.TRACK_TYPE_TEXT) return;
-        String[] titles = ResUtil.getStringArray(R.array.select_track);
-        int titleIndex = type - 1;
-        if (titleIndex < 0 || titleIndex >= titles.length) return;
-        trackSheetType = type;
-        hideControl();
-        ensureSheetHost();
-        sheetController.showTrack(readTrackState(titles[titleIndex]));
-    }
-
-    private VodTrackState readTrackState(String title) {
-        List<Track> tracks = currentTracks(trackSheetType);
-        List<String> names = new ArrayList<>();
-        List<Integer> selected = new ArrayList<>();
-        for (int i = 0; i < tracks.size(); i++) {
-            names.add(tracks.get(i).getName() == null ? "" : tracks.get(i).getName());
-            if (tracks.get(i).isSelected()) selected.add(i);
-        }
-        VodTrackActions actions = VodTrackSheetKt.vodTrackActions(trackSheetType, player().isVod(), player().haveTrack(trackSheetType));
-        return new VodTrackState(title, names, selected, actions.getShowChoose(), actions.getShowSubtitle(), actions.getShowOffset());
-    }
-
-    private List<Track> currentTracks(int type) {
-        List<Track> items = new ArrayList<>();
-        DefaultTrackNameProvider provider = new DefaultTrackNameProvider(getResources());
-        List<Tracks.Group> groups = player().getCurrentTracks().getGroups();
-        for (int i = 0; i < groups.size(); i++) {
-            Tracks.Group group = groups.get(i);
-            if (group.getType() != type) continue;
-            for (int j = 0; j < group.length; j++) {
-                Format format = group.getTrackFormat(j);
-                Track item = new Track(type, provider.getTrackName(format), PlayerHelper.describeFormat(format));
-                item.setSelected(group.isTrackSelected(j));
-                items.add(item);
-            }
-        }
-        return items;
+        sheets.onTrack(type);
     }
 
     private void onTrackSheetEvent(VodTrackEvent event) {
-        if (player() == null) return;
-        int id = event.getId();
-        if (id == VodTrackIds.CHOOSE) {
-            player().pause();
-            FileChooser.from(trackSubtitleLauncher).show(new String[]{MimeTypes.APPLICATION_SUBRIP, MimeTypes.TEXT_SSA, MimeTypes.TEXT_VTT, MimeTypes.APPLICATION_TTML, "audio/*", "text/*", "application/octet-stream"});
-            return;
-        }
-        if (id == VodTrackIds.SUBTITLE) {
-            onSubtitleClick();
-            return;
-        }
-        if (id == VodTrackIds.OFFSET) {
-            showOffsetSheet();
-            return;
-        }
-        if (id != VodTrackIds.TRACK) return;
-        List<Track> tracks = currentTracks(trackSheetType);
-        int index = event.getIndex();
-        if (index < 0 || index >= tracks.size()) return;
-        player().setTrack(Arrays.asList(tracks.get(index).key(player().getKey()).save()));
+        sheets.onTrackSheetEvent(event);
     }
 
     public void onEdition() {
-        if (player() == null) return;
-        hideControl();
-        ensureSheetHost();
-        sheetController.showEdition(readEditionState());
-    }
-
-    private VodEditionState readEditionState() {
-        List<MediaEdition> items = player().getCurrentMediaEditions();
-        List<String> names = new ArrayList<>();
-        int selected = -1;
-        if (items != null) {
-            for (int i = 0; i < items.size(); i++) {
-                MediaEdition item = items.get(i);
-                names.add(VodEditionSheetKt.editionRowLabel(item.label == null ? "" : item.label, item.durationUs));
-                if (selected < 0 && item.selected) selected = i;
-            }
-        }
-        return new VodEditionState(getString(R.string.dialog_select_edition), names, selected);
+        sheets.onEdition();
     }
 
     private void onEditionSheetEvent(int index) {
-        if (player() == null) return;
-        List<MediaEdition> items = player().getCurrentMediaEditions();
-        if (items == null || index < 0 || index >= items.size()) return;
-        player().selectEdition(items.get(index));
+        sheets.onEditionSheetEvent(index);
     }
 
     public void onChapter() {
-        if (player() == null) return;
-        hideControl();
-        ensureSheetHost();
-        sheetController.showChapter(readChapterState());
-    }
-
-    private VodChapterState readChapterState() {
-        List<MediaChapter> items = player().getCurrentMediaChapters();
-        List<String> names = new ArrayList<>();
-        int selected = -1;
-        if (items != null) {
-            for (int i = 0; i < items.size(); i++) {
-                MediaChapter item = items.get(i);
-                names.add(VodChapterSheetKt.chapterRowLabel(item.label == null ? "" : item.label, item.timeUs));
-                if (selected < 0 && item.selected) selected = i;
-            }
-        }
-        return new VodChapterState(getString(R.string.dialog_select_chapter), names, selected);
+        sheets.onChapter();
     }
 
     private void onChapterSheetEvent(int index) {
-        if (player() == null) return;
-        List<MediaChapter> items = player().getCurrentMediaChapters();
-        if (items == null || index < 0 || index >= items.size()) return;
-        player().selectChapter(items.get(index));
+        sheets.onChapterSheetEvent(index);
     }
 
     public void onDanmaku() {
-        if (player() == null) return;
-        hideControl();
-        ensureSheetHost();
-        sheetController.showDanmaku(readDanmakuState());
-    }
-
-    private VodDanmakuState readDanmakuState() {
-        List<Danmaku> items = player().getDanmakus();
-        List<String> names = new ArrayList<>();
-        int selected = -1;
-        if (items != null) {
-            for (int i = 0; i < items.size(); i++) {
-                Danmaku item = items.get(i);
-                names.add(item.getName() == null ? "" : item.getName());
-                if (selected < 0 && item.isSelected()) selected = i;
-            }
-        }
-        boolean showSearch = VodDanmakuSheetKt.danmakuShowSearch(player().getMetadata() != null, DanmakuSetting.getEffectiveApiUrl());
-        return new VodDanmakuState(getString(R.string.danmaku_select), names, selected, showSearch);
+        sheets.onDanmaku();
     }
 
     private void onDanmakuSheetEvent(VodDanmakuEvent event) {
-        if (player() == null) return;
-        int id = event.getId();
-        if (id == VodDanmakuIds.CHOOSE) {
-            player().pause();
-            FileChooser.from(danmakuFileLauncher).show("text/*");
-            return;
-        }
-        if (id == VodDanmakuIds.SEARCH) {
-            showDanmakuSearch();
-            return;
-        }
-        if (id == VodDanmakuIds.SETTING) {
-            showDanmakuSetting();
-            return;
-        }
-        if (id != VodDanmakuIds.ITEM) return;
-        List<Danmaku> items = player().getDanmakus();
-        int index = event.getIndex();
-        if (items == null || index < 0 || index >= items.size()) return;
-        Danmaku item = items.get(index);
-        player().setDanmaku(item.isSelected() ? Danmaku.empty() : item);
-    }
-
-    private void showDanmakuSearch() {
-        if (player() == null || player().getMetadata() == null) return;
-        ensureSheetHost();
-        danmakuSearchItems.clear();
-        MediaMetadata metadata = player().getMetadata();
-        String title = metadata.title == null ? "" : metadata.title.toString();
-        sheetController.showDanmakuSearch(new VodDanmakuSearchState(title, false, List.of(), -1));
+        sheets.onDanmakuSheetEvent(event);
     }
 
     private void onDanmakuSearchEvent(VodDanmakuSearchEvent event) {
-        if (player() == null) return;
-        if (event.getId() == VodDanmakuSearchIds.ITEM) {
-            int index = event.getIndex();
-            if (index < 0 || index >= danmakuSearchItems.size()) return;
-            Danmaku item = danmakuSearchItems.get(index);
-            player().setDanmaku(item.isSelected() ? Danmaku.empty() : item);
-            return;
-        }
-        if (event.getId() != VodDanmakuSearchIds.SEARCH) return;
-        if (!VodDanmakuSearchSheetKt.danmakuSearchReady(event.getKeyword())) return;
-        MediaMetadata metadata = player().getMetadata();
-        if (metadata == null) return;
-        String episode = metadata.artist == null ? "" : metadata.artist.toString().trim();
-        danmakuSearchItems.clear();
-        sheetController.updateDanmakuSearch(new VodDanmakuSearchState(sheetController.getDanmakuSearch().getKeyword(), true, List.of(), -1));
-        DanmakuApi.newCall(event.getKeyword().trim(), episode).enqueue(danmakuSearchCallback);
-    }
-
-    private void showDanmakuSearchResult(List<Danmaku> items) {
-        if (sheetController.getKind() != VodSheetKind.DanmakuSearch) return;
-        danmakuSearchItems.clear();
-        danmakuSearchItems.addAll(items);
-        sheetController.updateDanmakuSearch(readDanmakuSearchState(false));
-    }
-
-    private void failDanmakuSearch(Exception e) {
-        if (sheetController.getKind() != VodSheetKind.DanmakuSearch) return;
-        sheetController.updateDanmakuSearch(readDanmakuSearchState(false));
-        Notify.show(e.getMessage());
-    }
-
-    private VodDanmakuSearchState readDanmakuSearchState(boolean loading) {
-        List<String> names = new ArrayList<>();
-        int selected = -1;
-        for (int i = 0; i < danmakuSearchItems.size(); i++) {
-            Danmaku item = danmakuSearchItems.get(i);
-            names.add(item.getName() == null ? "" : item.getName());
-            if (selected < 0 && item.isSelected()) selected = i;
-        }
-        return new VodDanmakuSearchState(sheetController.getDanmakuSearch().getKeyword(), loading, names, selected);
+        sheets.onDanmakuSearchEvent(event);
     }
 
     private void dismissDanmakuSearch() {
-        DanmakuApi.cancel();
-        if (sheetController.getKind() == VodSheetKind.DanmakuSearch) sheetController.dismiss();
-    }
-
-    private void showDanmakuSetting() {
-        if (player() == null) return;
-        ensureSheetHost();
-        sheetController.showDanmakuSetting(readDanmakuSettingState(0));
+        sheets.dismissDanmakuSearch();
     }
 
     private void onDanmakuSettingEvent(VodDanmakuSettingEvent event) {
-        int id = event.getId();
-        int tab = event.getTab();
-        if (id == VodDanmakuSettingIds.TAB) {
-            if (sheetController.getKind() != VodSheetKind.DanmakuSetting) return;
-            sheetController.updateDanmakuSetting(readDanmakuSettingState(tab));
-            return;
-        }
-        if (player() == null) return;
-        if (id == VodDanmakuSettingIds.RESET) {
-            if (tab == 0) DanmakuSetting.resetAppearance();
-            else if (tab == 1) DanmakuSetting.resetTiming();
-            else if (tab == 2) DanmakuSetting.resetDensity();
-            else if (tab == 3) DanmakuSetting.resetDisplay();
-            else return;
-        } else if (id == VodDanmakuSettingIds.BOOL) {
-            if (!writeDanmakuBool(event.getKey(), event.getBoolValue())) return;
-        } else if (id == VodDanmakuSettingIds.FLOAT) {
-            if (!writeDanmakuFloat(event.getKey(), event.getFloatValue())) return;
-        } else if (id == VodDanmakuSettingIds.MODE) {
-            if (!writeDanmakuMode(event.getKey(), event.getIntValue())) return;
-        } else {
-            return;
-        }
-        player().setDanmakuConfig(DanmakuSetting.getConfig());
-        sheetController.updateDanmakuSetting(readDanmakuSettingState(tab));
-    }
-
-    private boolean writeDanmakuBool(int key, boolean value) {
-        if (key == VodDanmakuSettingKeys.TEXT_BOLD) DanmakuSetting.putTextBold(value);
-        else if (key == VodDanmakuSettingKeys.SHOW_SCROLL) DanmakuSetting.putShowScroll(value);
-        else if (key == VodDanmakuSettingKeys.SHOW_TOP) DanmakuSetting.putShowTop(value);
-        else if (key == VodDanmakuSettingKeys.SHOW_BOTTOM) DanmakuSetting.putShowBottom(value);
-        else if (key == VodDanmakuSettingKeys.SHOW_REVERSE) DanmakuSetting.putShowReverse(value);
-        else if (key == VodDanmakuSettingKeys.SHOW_POSITIONED) DanmakuSetting.putShowPositioned(value);
-        else if (key == VodDanmakuSettingKeys.SHOW_SUBTITLE) DanmakuSetting.putShowSubtitle(value);
-        else if (key == VodDanmakuSettingKeys.SHOW_SPECIAL) DanmakuSetting.putShowSpecial(value);
-        else return false;
-        return true;
-    }
-
-    private boolean writeDanmakuFloat(int key, float value) {
-        if (key == VodDanmakuSettingKeys.TEXT_SCALE) DanmakuSetting.putTextScale(value);
-        else if (key == VodDanmakuSettingKeys.TRANSPARENCY) DanmakuSetting.putTransparency(value);
-        else if (key == VodDanmakuSettingKeys.SHADOW) DanmakuSetting.putShadowTransparency(value);
-        else if (key == VodDanmakuSettingKeys.STROKE) DanmakuSetting.putStrokeWidthMultiplier(value);
-        else if (key == VodDanmakuSettingKeys.PROJECTION_X) DanmakuSetting.putProjectionOffsetX(value);
-        else if (key == VodDanmakuSettingKeys.PROJECTION_Y) DanmakuSetting.putProjectionOffsetY(value);
-        else if (key == VodDanmakuSettingKeys.PROJECTION_ALPHA) DanmakuSetting.putProjectionTransparency(value);
-        else if (key == VodDanmakuSettingKeys.TIME_OFFSET) DanmakuSetting.putTimeOffsetMs((long) value);
-        else if (key == VodDanmakuSettingKeys.DURATION) DanmakuSetting.putDurationMs((long) value);
-        else if (key == VodDanmakuSettingKeys.FIXED_DURATION) DanmakuSetting.putFixedDurationMs((long) value);
-        else if (key == VodDanmakuSettingKeys.MAX_ON_SCREEN) DanmakuSetting.putMaxOnScreen(Math.round(value));
-        else if (key == VodDanmakuSettingKeys.SCROLL_AREA) DanmakuSetting.putScrollAreaRatio(value);
-        else if (key == VodDanmakuSettingKeys.SCROLL_GAP) DanmakuSetting.putScrollGapRatio(value);
-        else if (key == VodDanmakuSettingKeys.LINE_SPACING) DanmakuSetting.putLineSpacing(value);
-        else if (key == VodDanmakuSettingKeys.MAX_SCROLL) DanmakuSetting.putMaxScrollLines(Math.round(value));
-        else if (key == VodDanmakuSettingKeys.MAX_TOP) DanmakuSetting.putMaxTopLines(Math.round(value));
-        else if (key == VodDanmakuSettingKeys.MAX_BOTTOM) DanmakuSetting.putMaxBottomLines(Math.round(value));
-        else return false;
-        return true;
-    }
-
-    private boolean writeDanmakuMode(int key, int value) {
-        if (key == VodDanmakuSettingKeys.STYLE) DanmakuSetting.putStyleMode(value);
-        else if (key == VodDanmakuSettingKeys.COLOR) DanmakuSetting.putColorMode(value);
-        else return false;
-        return true;
-    }
-
-    private VodDanmakuSettingState readDanmakuSettingState(int tab) {
-        return new VodDanmakuSettingState(
-                tab,
-                DanmakuSetting.isTextBold(),
-                DanmakuSetting.getTextScale(),
-                DanmakuSetting.getTransparency(),
-                DanmakuSetting.getShadowTransparency(),
-                DanmakuSetting.getStrokeWidthMultiplier(),
-                DanmakuSetting.getProjectionOffsetX(),
-                DanmakuSetting.getProjectionOffsetY(),
-                DanmakuSetting.getProjectionTransparency(),
-                DanmakuSetting.getStyleMode(),
-                DanmakuSetting.getColorMode(),
-                (float) DanmakuSetting.getTimeOffsetMs(),
-                (float) DanmakuSetting.getDurationMs(),
-                (float) DanmakuSetting.getFixedDurationMs(),
-                DanmakuSetting.getMaxOnScreen(),
-                DanmakuSetting.getScrollAreaRatio(),
-                DanmakuSetting.getScrollGapRatio(),
-                DanmakuSetting.getLineSpacing(),
-                DanmakuSetting.getMaxScrollLines(),
-                DanmakuSetting.getMaxTopLines(),
-                DanmakuSetting.getMaxBottomLines(),
-                DanmakuSetting.isShowScroll(),
-                DanmakuSetting.isShowTop(),
-                DanmakuSetting.isShowBottom(),
-                DanmakuSetting.isShowReverse(),
-                DanmakuSetting.isShowPositioned(),
-                DanmakuSetting.isShowSubtitle(),
-                DanmakuSetting.isShowSpecial()
-        );
+        sheets.onDanmakuSettingEvent(event);
     }
 
     public void onChoose() {
-        if (player() == null) return;
-        hideControl();
-        ensureSheetHost();
-        sheetController.showEngine(readEngineState());
-    }
-
-    private VodEngineState readEngineState() {
-        EngineSelection selection = VodEngineSheetKt.engineSelection(PlaybackAction.getEngine(player()));
-        return new VodEngineState(getString(R.string.player_engine), selection.getExo(), selection.getMpv(), isDebugViewVisible());
+        sheets.onChoose();
     }
 
     private void onEngineSheetEvent(VodEngineEvent event) {
-        if (player() == null) return;
-        int id = event.getId();
-        if (id == VodEngineIds.DEBUG) {
-            toggleDebugView();
-            return;
-        }
-        if (id == VodEngineIds.OTHER) {
-            chooseOtherPlayer(playTitle);
-            return;
-        }
-        int engine = id == VodEngineIds.EXO ? PlayerSetting.ENGINE_EXO : id == VodEngineIds.MPV ? PlayerSetting.ENGINE_MPV : -1;
-        if (engine != PlayerSetting.ENGINE_EXO && engine != PlayerSetting.ENGINE_MPV) return;
-        if (engine != PlaybackAction.getEngine(player())) hideDebugView();
-        player().setEngine(engine);
+        sheets.onEngineSheetEvent(event);
     }
 
     private void onDanmakuShow() {
@@ -1426,130 +928,71 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void enterFullscreen() {
-        if (isFullscreen()) return;
-        setFullscreen(true);
-        if (isLand() && !player().isPortrait()) setTransition();
-        mBinding.video.setLayoutParams(new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, RelativeLayout.LayoutParams.MATCH_PARENT));
-        setRequestedOrientation(PlaybackOrientation.getEnterFullscreenOrientation(player().isPortrait()));
-        setRotate(player().isPortrait());
-        mPlayerScale.reset();
-        App.post(mR3, 2000);
-        hideControl();
+        chrome.enterFullscreen();
     }
 
     private void exitFullscreen() {
-        if (!isFullscreen()) return;
-        setFullscreen(false);
-        if (isLand() && !player().isPortrait()) setTransition();
-        setRequestedOrientation(PlaybackOrientation.getExitFullscreenOrientation(isPort()));
-        mBinding.video.setLayoutParams(mFrameParams);
-        mPlayerScale.reset();
-        App.post(mR3, 2000);
-        setRotate(false);
-        hideControl();
-    }
-
-    private void setTransition() {
-        ChangeBounds transition = new ChangeBounds();
-        transition.setDuration(150);
-        ViewGroup parent = (ViewGroup) mBinding.video.getParent();
-        TransitionManager.beginDelayedTransition(parent, transition);
+        chrome.exitFullscreen();
     }
 
     private int getLockOrient() {
-        return PlaybackOrientation.getLockOrientation(this, isLock(), isRotate(), isPort() && isAutoRotate());
+        return chrome.getLockOrient();
     }
 
     void showProgress() {
-        mBinding.progress.getRoot().setVisibility(View.VISIBLE);
-        App.post(mR2, 0);
-        hideError();
+        chrome.showProgress();
     }
 
     private void hideProgress() {
-        mBinding.progress.getRoot().setVisibility(View.GONE);
-        App.removeCallbacks(mR2);
-        Traffic.reset();
+        chrome.hideProgress();
     }
 
     void showError(String text) {
-        if (mSession != null) mSession.setErrorMessage(text);
-        hideProgress();
-    }
-
-    private void hideError() {
-        if (mSession != null) mSession.setErrorMessage(null);
+        chrome.showError(text);
     }
 
     private void syncDanmakuEnabled() {
-        player().setDanmakuEnabled(DanmakuSetting.isShow());
+        chrome.syncDanmakuEnabled();
     }
 
     private void hideDanmaku() {
-        player().setDanmakuEnabled(false);
+        chrome.hideDanmaku();
     }
 
     private boolean isControlOpen() {
-        return isVisible(mBinding.controlDim);
-    }
-
-    private void setComposeControlVisible(boolean open) {
-        mBinding.controlDim.setVisibility(open ? View.VISIBLE : View.GONE);
-        mBinding.controlTopCompose.setVisibility(View.VISIBLE);
-        mBinding.controlCenterCompose.setVisibility(View.VISIBLE);
-        mBinding.controlBottomCompose.setVisibility(View.VISIBLE);
-        mBinding.controlLockCompose.setVisibility(View.VISIBLE);
+        return chrome.isControlOpen();
     }
 
     private void padComposeControls(boolean pad) {
-        ViewGroup[] views = new ViewGroup[] {mBinding.controlTopCompose, mBinding.controlCenterCompose, mBinding.controlLockCompose, mBinding.controlBottomCompose};
-        for (ViewGroup view : views) {
-            if (pad) setPadding(view);
-            else noPadding(view);
-        }
+        chrome.padComposeControls(pad);
     }
 
     private void showControl() {
-        if (service() == null || isInPictureInPictureMode()) return;
-        setComposeControlVisible(true);
-        applyChromeUi(true);
-        setR1Callback();
+        chrome.showControl();
     }
 
     private void hideControl() {
-        setComposeControlVisible(false);
-        applyChromeUi(false);
-        App.removeCallbacks(mR1);
+        chrome.hideControl();
     }
 
     private void updatePlayInfo() {
-        applyChromeUi(isControlOpen());
-    }
-
-    private void applyChromeUi(boolean controlsVisible) {
-        boolean fullscreen = isFullscreen() && !isInPictureInPictureMode();
-        if (fullscreen && !isRotate()) setPadding(mBinding.gestureCompose);
-        else noPadding(mBinding.gestureCompose);
-        syncComposeChrome(controlsVisible);
+        chrome.updatePlayInfo();
     }
 
     private void hideSheet() {
-        getSupportFragmentManager().getFragments().stream().filter(fragment -> fragment instanceof BottomSheetDialogFragment).map(fragment -> (BottomSheetDialogFragment) fragment).forEach(BottomSheetDialogFragment::dismiss);
+        chrome.hideSheet();
     }
 
     private void setTraffic() {
-        Traffic.setSpeed(mBinding.progress.traffic);
-        App.post(mR2, 1000);
+        chrome.setTraffic();
     }
 
     private void setOrient() {
-        if (isPort() && isAutoRotate()) setRequestedOrientation(PlaybackOrientation.getPortAutoRotateOrientation());
-        if (isLand() && isAutoRotate()) setRequestedOrientation(PlaybackOrientation.getLandAutoRotateOrientation());
+        chrome.setOrient();
     }
 
     private void setR1Callback() {
-        if (isScrubbing()) return;
-        App.post(mR1, Constant.INTERVAL_HIDE);
+        chrome.setR1Callback();
     }
 
     @Override
@@ -1608,19 +1051,7 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void pushComposeControlVisibility() {
-        if (mSession == null) return;
-        boolean showCast = false;
-        boolean showDanmaku = false;
-        try {
-            if (service() != null) {
-                showCast = !player().isEmpty();
-                showDanmaku = player().haveDanmaku();
-            }
-        } catch (Exception ignored) {
-        }
-        boolean showPip = !isFullscreen() && !PiP.noPiP();
-        boolean showRotate = isFullscreen();
-        mSession.updateControlVisibility(showCast, showPip, showRotate, showDanmaku, DanmakuSetting.isShow());
+        chrome.pushComposeControlVisibility();
     }
 
     void updateKeep() {
@@ -1733,72 +1164,15 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
 
     @Override
     public void onSubtitleClick() {
-        if (mBinding.player.getSubtitleView() == null) return;
-        hideControl();
-        ensureSheetHost();
-        sheetController.showSubtitle();
+        sheets.onSubtitleClick();
     }
 
     private void onSubtitleSheetEvent(int id) {
-        SubtitleView view = mBinding.player.getSubtitleView();
-        if (view == null) return;
-        if (id == VodSubtitleIds.LARGE) {
-            view.addTextSize(0.002f);
-            PlayerSetting.putSubtitleTextSize(view.getTextSize());
-        } else if (id == VodSubtitleIds.SMALL) {
-            view.subTextSize(0.002f);
-            PlayerSetting.putSubtitleTextSize(view.getTextSize());
-        } else if (id == VodSubtitleIds.UP) {
-            view.addPosition(0.005f);
-            PlayerSetting.putSubtitlePosition(view.getPosition());
-        } else if (id == VodSubtitleIds.DOWN) {
-            view.subPosition(0.005f);
-            PlayerSetting.putSubtitlePosition(view.getPosition());
-        } else if (id == VodSubtitleIds.RESET) {
-            PlayerSetting.putSubtitleTextSize(0.0f);
-            PlayerSetting.putSubtitlePosition(0.0f);
-            view.reset();
-        } else {
-            return;
-        }
-        if (player() != null && !player().isReleased()) player().setSubtitleStyle();
-    }
-
-    private void showOffsetSheet() {
-        if (player() == null) return;
-        if (trackSheetType != C.TRACK_TYPE_AUDIO && trackSheetType != C.TRACK_TYPE_TEXT) return;
-        ensureSheetHost();
-        sheetController.showOffset(readOffsetState());
-    }
-
-    private VodOffsetState readOffsetState() {
-        boolean audio = trackSheetType == C.TRACK_TYPE_AUDIO;
-        float from = audio ? -10000f : -300000f;
-        float to = audio ? 10000f : 300000f;
-        float step = audio ? 100f : 1000f;
-        long raw = audio ? player().getAudioOffsetMs() : player().getTextOffsetMs();
-        float value = VodOffsetSheetKt.snapOffset(raw, from, to, step);
-        return new VodOffsetState(getString(R.string.offset_setting), audio, value);
+        sheets.onSubtitleSheetEvent(id);
     }
 
     private void onOffsetSheetEvent(VodOffsetEvent event) {
-        if (player() == null) return;
-        boolean audio = trackSheetType == C.TRACK_TYPE_AUDIO;
-        if (event.getId() == VodOffsetIds.RESET) {
-            if (audio) player().setAudioOffsetMs(0);
-            else player().setTextOffsetMs(0);
-            sheetController.updateOffset(readOffsetState());
-            return;
-        }
-        if (event.getId() != VodOffsetIds.CHANGE) return;
-        float from = audio ? -10000f : -300000f;
-        float to = audio ? 10000f : 300000f;
-        float step = audio ? 100f : 1000f;
-        float value = VodOffsetSheetKt.snapOffset(event.getValueMs(), from, to, step);
-        long ms = Math.round(value);
-        if (audio) player().setAudioOffsetMs(ms);
-        else player().setTextOffsetMs(ms);
-        sheetController.updateOffset(new VodOffsetState(getString(R.string.offset_setting), audio, value));
+        sheets.onOffsetSheetEvent(event);
     }
 
     @Override
@@ -2007,78 +1381,45 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void onComposeBrightness(float delta) {
-        if (!gestureBrightArmed) {
-            gestureBright = Util.getBrightness(this);
-            gestureBrightArmed = true;
-        }
-        int height = mBinding.player.getHeight();
-        if (height <= 0) height = mBinding.video.getHeight();
-        if (height <= 0) return;
-        float brightness = delta * 2f / height + gestureBright;
-        if (brightness < 0f) brightness = 0f;
-        if (brightness > 1f) brightness = 1f;
-        WindowManager.LayoutParams attributes = getWindow().getAttributes();
-        attributes.screenBrightness = brightness;
-        getWindow().setAttributes(attributes);
-        onBright((int) (brightness * 100));
+        int percent = gestures.brightness(this, gestureHeight(), delta);
+        if (percent >= 0) onBright(percent);
     }
 
     private void onComposeVolume(float delta) {
-        if (gestureAudio == null) gestureAudio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        if (gestureAudio == null) return;
-        if (!gestureVolumeArmed) {
-            gestureVolume = gestureAudio.getStreamVolume(AudioManager.STREAM_MUSIC);
-            gestureVolumeMax = gestureAudio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-            gestureVolumeArmed = true;
-        }
-        int height = mBinding.player.getHeight();
-        if (height <= 0) height = mBinding.video.getHeight();
-        if (height <= 0 || gestureVolumeMax <= 0) return;
-        float index = gestureVolume + delta * 2f / height * gestureVolumeMax;
-        if (index > gestureVolumeMax) index = gestureVolumeMax;
-        if (index < 0f) index = 0f;
-        gestureAudio.setStreamVolume(AudioManager.STREAM_MUSIC, (int) index, 0);
-        onVolume((int) (index / gestureVolumeMax * 100f));
+        int percent = gestures.volume(this, gestureHeight(), delta);
+        if (percent >= 0) onVolume(percent);
     }
 
     private void onComposeSeekPreview(long deltaMs) {
-        gestureSeeking = true;
-        gestureSeekMs = deltaMs;
-        onSeeking(deltaMs);
+        onSeeking(gestures.seekPreview(deltaMs));
     }
 
     private void onComposeSeekEnd() {
-        if (!gestureSeeking) return;
-        long delta = gestureSeekMs;
-        gestureSeeking = false;
-        onSeekEnd(delta);
+        long delta = gestures.seekEnd();
+        if (delta != Long.MIN_VALUE) onSeekEnd(delta);
     }
 
     private void onComposeScale(float factor, float focusX, float focusY) {
-        if (isLock()) return;
-        mPlayerScale.apply(factor, focusX, focusY);
+        gestures.scale(mPlayerScale, isLock(), factor, focusX, focusY);
     }
 
     private void onComposeFlingUp() {
-        animateGestureFling(true);
+        gestures.fling(mBinding.player, true, this::onFlingUp);
     }
 
     private void onComposeFlingDown() {
-        animateGestureFling(false);
-    }
-
-    private void animateGestureFling(boolean up) {
-        if (gestureAnimating) return;
-        boolean invert = LiveSetting.isInvert();
-        int dp = up ? (invert ? 24 : -24) : (invert ? -24 : 24);
-        Runnable action = up ? this::onFlingUp : this::onFlingDown;
-        mBinding.player.animate().translationYBy(ResUtil.dp2px(dp)).setDuration(150).withStartAction(() -> gestureAnimating = true).withEndAction(() -> mBinding.player.animate().translationY(0).setDuration(100).withStartAction(action).withEndAction(() -> gestureAnimating = false).start()).start();
+        gestures.fling(mBinding.player, false, this::onFlingDown);
     }
 
     private void onComposeTouchEnd() {
-        gestureBrightArmed = false;
-        gestureVolumeArmed = false;
+        gestures.reset();
         onTouchEnd();
+    }
+
+    private int gestureHeight() {
+        int height = mBinding.player.getHeight();
+        if (height <= 0) height = mBinding.video.getHeight();
+        return height;
     }
 
     public void onShare(CharSequence title) {
@@ -2087,273 +1428,67 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
     }
 
     private void onDownload() {
-        if (episodeCount() == 0) return;
-        syncCatalog();
-        ensureSheetHost();
-        sheetController.showEpisodes(true);
-    }
-
-    private void ensureSheetHost() {
-        mBinding.sheetCompose.bringToFront();
-        mBinding.sheetCompose.setVisibility(View.VISIBLE);
+        sheets.onDownload();
     }
 
     private void onSheetPlayEpisode(int index) {
-        onComposeEpisode(index);
+        sheets.onSheetPlayEpisode(index);
     }
 
     private void onSheetDownloadEpisode(int index) {
-        VodPlaybackState state = mViewModel.getPlaybackState();
-        if (!state.hasFlags()) return;
-        List<Episode> episodes = state.getFlag().getEpisodes();
-        if (index < 0 || index >= episodes.size()) return;
-        onDownloadEpisode(episodes.get(index));
+        sheets.onSheetDownloadEpisode(index);
     }
 
     private void onSheetDownloadList() {
-        DownloadDialog.openList(this);
+        sheets.onSheetDownloadList();
     }
 
     private void onSheetDownloadConfirm(VodDownloadConfirm confirm) {
-        if (DownloadDialog.send(this, confirm.getFileName(), confirm.getUrl(), confirm.getHeaders())) {
-            if (mSession != null) mSession.clearDownloadReady();
-            sheetController.dismiss();
-        }
+        sheets.onSheetDownloadConfirm(confirm);
     }
 
     private void onSheetInfoShare(String title) {
-        onShare(title);
+        sheets.onSheetInfoShare(title);
     }
 
     private void onSheetControlMore(int id) {
-        if (id == VodControlMoreIds.EPISODES) {
-            syncCatalog();
-            ensureSheetHost();
-            sheetController.showEpisodes(false);
-        } else if (id == VodControlMoreIds.SPEED) {
-            onCycleSpeed();
-        } else if (id == VodControlMoreIds.SCALE) {
-            onScale((getScale() + 1) % 5);
-        } else if (id == VodControlMoreIds.DECODE) {
-            onDecode();
-        } else if (id == VodControlMoreIds.REPEAT) {
-            onRepeat();
-        } else if (id == VodControlMoreIds.OPENING) {
-            onOpening();
-        } else if (id == VodControlMoreIds.ENDING) {
-            onEnding();
-        } else if (id == VodControlMoreIds.INFO) {
-            onPlaybackInfo();
-        } else if (id == VodControlMoreIds.TEXT) onTrack(C.TRACK_TYPE_TEXT);
-        else if (id == VodControlMoreIds.SUBTITLE) onSubtitleClick();
-        else if (id == VodControlMoreIds.AUDIO) onTrack(C.TRACK_TYPE_AUDIO);
-        else if (id == VodControlMoreIds.VIDEO) onTrack(C.TRACK_TYPE_VIDEO);
-        else if (id == VodControlMoreIds.DANMAKU) onDanmaku();
-        else if (id == VodControlMoreIds.REPLAY) onReplay();
-        else if (id == VodControlMoreIds.RESET) onRefresh();
-        else if (id == VodControlMoreIds.ALL_SETTINGS) onAllSettings();
-    }
-
-    private void onCycleSpeed() {
-        if (player() == null) return;
-        player().addSpeed();
-        if (mVod != null) mVod.setSpeed(player().getSpeed());
-        pushPlaybackProgress(readPositionMs(), readDurationMs());
-        setR1Callback();
-    }
-
-    private void onPlaybackInfo() {
-        CharSequence title = getNameText();
-        ensureSheetHost();
-        sheetController.showInfo(title, player().getUrl(), player().getHeaders());
-    }
-
-    private void onDownloadEpisode(Episode item) {
-        int seq = ++downloadSeq;
-        stopDownloadParse();
-        VodPlaybackState state = mViewModel.getPlaybackState();
-        Episode activated = state.hasEpisode() ? state.getEpisode() : null;
-        if (item.equals(activated)) {
-            DownloadResolveOutcome.Ready ready = mSession.prepareDownloadFromPlayer(
-                    player().getUrl(),
-                    player().getHeaders(),
-                    VodDownloadResolver.buildFileName(getNameText(), item.getName())
-            );
-            if (ready != null) {
-                showDownload(item, ready.getUrl(), ready.getHeaders());
-                return;
-            }
-        }
-        Flag flag = state.hasFlags() ? state.getFlag() : null;
-        if (flag == null) {
-            Notify.show(R.string.error_play_flag);
-            return;
-        }
-        Notify.show(R.string.download_fetch);
-        String key = getKey();
-        String flagName = flag.getFlag();
-        String id = item.getUrl();
-        Task.execute(() -> {
-            try {
-                Result result = SiteApi.playerContent(key, flagName, id, false);
-                App.post(() -> onDownloadContent(seq, item, result));
-            } catch (Exception e) {
-                App.post(() -> onDownloadFailed(seq, R.string.error_play_url));
-            }
-        });
-    }
-
-    private void onDownloadContent(int seq, Episode item, Result result) {
-        if (!acceptDownload(seq)) return;
-        DownloadResolveOutcome outcome = mSession.resolveDownloadResult(result);
-        if (outcome instanceof DownloadResolveOutcome.Message message) {
-            Notify.show(message.getText());
-            return;
-        }
-        if (outcome instanceof DownloadResolveOutcome.EmptyUrl) {
-            Notify.show(R.string.error_play_url);
-            return;
-        }
-        if (outcome instanceof DownloadResolveOutcome.NeedParse needParse) {
-            Result parseResult = needParse.getResult();
-            downloadParse = ParseJob.create(new ParseCallback() {
-                @Override
-                public void onParseSuccess(Map<String, String> headers, String url, String from) {
-                    if (!acceptDownload(seq)) return;
-                    DownloadResolveOutcome.Ready ready = mSession.prepareDownloadFromPlayer(
-                            url,
-                            headers,
-                            VodDownloadResolver.buildFileName(getNameText(), item.getName())
-                    );
-                    if (ready == null) Notify.show(R.string.error_play_parse);
-                    else showDownload(item, ready.getUrl(), ready.getHeaders());
-                }
-
-                @Override
-                public void onParseError() {
-                    onDownloadFailed(seq, R.string.error_play_parse);
-                }
-            }).start(parseResult, parseResult.isUseParse());
-            return;
-        }
-        if (outcome instanceof DownloadResolveOutcome.Ready ready) {
-            showDownload(item, ready.getUrl(), ready.getHeaders());
-        }
-    }
-
-    private void onDownloadFailed(int seq, int resId) {
-        if (!acceptDownload(seq)) return;
-        Notify.show(resId);
-    }
-
-    private boolean acceptDownload(int seq) {
-        return seq == downloadSeq && !isFinishing() && !isDestroyed();
+        sheets.onSheetControlMore(id);
     }
 
     private void stopDownloadParse() {
-        if (downloadParse == null) return;
-        downloadParse.stop();
-        downloadParse = null;
-    }
-
-    private void showDownload(Episode item, String url, Map<String, String> headers) {
-        if (TextUtils.isEmpty(url)) return;
-        String save = VodDownloadResolver.buildFileName(getNameText(), item == null ? "" : item.getName());
-        VodPlaybackState state = mViewModel.getPlaybackState();
-        Episode activated = state.hasEpisode() ? state.getEpisode() : null;
-        long duration = item != null && item.equals(activated) ? player().getDuration() : 0;
-        mSession.presentDownloadConfirm(save, url, duration, headers);
-        ensureSheetHost();
-        sheetController.showDownloadConfirm(save, url, duration, headers);
+        sheets.stopDownloadParse();
     }
 
     private void onPip() {
-        mPiP.enter(this, player().getVideoWidth(), player().getVideoHeight(), getScale(), true);
+        chrome.onPip();
     }
 
     private long readPositionMs() {
-        try {
-            if (controller() != null) {
-                long position = controller().getCurrentPosition();
-                if (position >= 0) return position;
-            }
-            if (service() != null) {
-                long position = player().getPosition();
-                if (position >= 0) return position;
-            }
-        } catch (Exception ignored) {
-        }
-        return 0;
+        return chrome.readPositionMs();
     }
 
     private long readDurationMs() {
-        try {
-            if (controller() != null) {
-                long duration = controller().getDuration();
-                if (duration > 0 && duration != C.TIME_UNSET) return duration;
-            }
-            if (service() != null) {
-                long duration = player().getDuration();
-                if (duration > 0 && duration != C.TIME_UNSET) return duration;
-            }
-        } catch (Exception ignored) {
-        }
-        return 0;
+        return chrome.readDurationMs();
     }
 
     private void updateMiniTime() {
-        updateMiniTime(readPositionMs(), readDurationMs());
+        chrome.updateMiniTime();
     }
 
     private void syncComposeChrome(boolean visible) {
-        if (mSession == null) return;
-        boolean fullscreen = isFullscreen() && !isInPictureInPictureMode();
-        mSession.updatePlaybackChrome(visible, isLock(), readPlaying(), readPositionMs(), readDurationMs(), readSpeed(), fullscreen);
-        pushComposeControlVisibility();
+        chrome.syncComposeChrome(visible);
     }
 
     private void pushPlaybackProgress(long position, long duration) {
-        if (mSession == null) return;
-        long safePosition = position < 0 ? 0 : position;
-        long safeDuration = duration < 0 || duration == C.TIME_UNSET ? 0 : duration;
-        mSession.updatePlaybackProgress(safePosition, safeDuration, readPlaying(), readSpeed());
-    }
-
-    private boolean readPlaying() {
-        try {
-            return service() != null && player().isPlaying();
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
-
-    private float readSpeed() {
-        try {
-            return service() != null ? player().getSpeed() : 1f;
-        } catch (Exception ignored) {
-            return 1f;
-        }
+        chrome.pushPlaybackProgress(position, duration);
     }
 
     private void onComposeSeek(long positionMs) {
-        long target = Math.max(0, positionMs);
-        if (controller() != null) {
-            controller().seekTo(target);
-            controller().play();
-        }
-        updateMiniTime();
-        setR1Callback();
+        chrome.onComposeSeek(positionMs);
     }
 
     private void onComposeScrub(boolean scrubbing) {
-        if (scrubbing) App.removeCallbacks(mR1);
-        else if (isControlOpen()) setR1Callback();
-    }
-
-    private void updateMiniTime(long position, long duration) {
-        if (position < 0) position = 0;
-        if (duration < 0 || duration == C.TIME_UNSET) duration = 0;
-        pushPlaybackProgress(position, duration);
+        chrome.onComposeScrub(scrubbing);
     }
 
     @Override
@@ -2440,4 +1575,365 @@ public class VideoActivity extends PlaybackActivity implements VodPlaybackActivi
         App.removeCallbacks(mR1, mR2, mR3, mR4);
         super.onDestroy();
     }
+
+    private final class SheetHost implements MobileVodSheets.Host {
+        @Override
+        public PlayerManager player() {
+            return VideoActivity.this.player();
+        }
+
+        @Override
+        public int scale() {
+            return getScale();
+        }
+
+        @Override
+        public String text(int resId) {
+            return getString(resId);
+        }
+
+        @Override
+        public Resources resources() {
+            return getResources();
+        }
+
+        @Override
+        public VodSheetController sheet() {
+            return sheetController;
+        }
+
+        @Override
+        public boolean useParse() {
+            return isUseParse();
+        }
+
+        @Override
+        public String openingLabel() {
+            return VideoActivity.this.openingLabel();
+        }
+
+        @Override
+        public String endingLabel() {
+            return VideoActivity.this.endingLabel();
+        }
+
+        @Override
+        public void onSpeedChanged(float speed) {
+            VideoActivity.this.onSpeedChanged(speed);
+        }
+
+        @Override
+        public void onParse(Parse item) {
+            VideoActivity.this.onParse(item);
+        }
+
+        @Override
+        public void onScale(int index) {
+            VideoActivity.this.onScale(index);
+        }
+
+        @Override
+        public void onDecode() {
+            VideoActivity.this.onDecode();
+        }
+
+        @Override
+        public void onRepeat() {
+            VideoActivity.this.onRepeat();
+        }
+
+        @Override
+        public void onOpening() {
+            VideoActivity.this.onOpening();
+        }
+
+        @Override
+        public boolean onOpeningReset() {
+            return VideoActivity.this.onOpeningReset();
+        }
+
+        @Override
+        public void onEnding() {
+            VideoActivity.this.onEnding();
+        }
+
+        @Override
+        public boolean onEndingReset() {
+            return VideoActivity.this.onEndingReset();
+        }
+
+        @Override
+        public void hideControl() {
+            VideoActivity.this.hideControl();
+        }
+
+        @Override
+        public ActivityResultLauncher<Intent> trackSubtitleLauncher() {
+            return trackSubtitleLauncher;
+        }
+
+        @Override
+        public ActivityResultLauncher<Intent> danmakuFileLauncher() {
+            return danmakuFileLauncher;
+        }
+
+        @Override
+        public boolean debugVisible() {
+            return isDebugViewVisible();
+        }
+
+        @Override
+        public void toggleDebug() {
+            toggleDebugView();
+        }
+
+        @Override
+        public void hideDebug() {
+            hideDebugView();
+        }
+
+        @Override
+        public void chooseOther(String title) {
+            chooseOtherPlayer(title);
+        }
+
+        @Override
+        public String playTitle() {
+            return playTitle;
+        }
+
+        @Override
+        public void ensureSheet() {
+            ensureSheetHost();
+        }
+
+        @Override
+        public void playEpisode(int index) {
+            onComposeEpisode(index);
+        }
+
+        @Override
+        public VideoViewModel model() {
+            return mViewModel;
+        }
+
+        @Override
+        public VodSessionViewModel session() {
+            return mSession;
+        }
+
+        @Override
+        public String nameText() {
+            return getNameText();
+        }
+
+        @Override
+        public String siteKey() {
+            return getKey();
+        }
+
+        @Override
+        public int episodeCount() {
+            return VideoActivity.this.episodeCount();
+        }
+
+        @Override
+        public void syncCatalog() {
+            VideoActivity.this.syncCatalog();
+        }
+
+        @Override
+        public boolean alive() {
+            return !isFinishing() && !isDestroyed();
+        }
+
+        @Override
+        public void share(CharSequence title) {
+            onShare(title);
+        }
+
+        @Override
+        public void replay() {
+            onReplay();
+        }
+
+        @Override
+        public void refresh() {
+            onRefresh();
+        }
+
+        @Override
+        public void rememberSpeed() {
+            if (mVod != null) mVod.setSpeed(player().getSpeed());
+        }
+
+        @Override
+        public void pushProgress() {
+            pushPlaybackProgress(readPositionMs(), readDurationMs());
+        }
+
+        @Override
+        public void armHide() {
+            setR1Callback();
+        }
+
+        @Override
+        public SubtitleView subtitleView() {
+            return mBinding.player.getSubtitleView();
+        }
+
+        @Override
+        public Activity activity() {
+            return VideoActivity.this;
+        }
+    }
+
+
+    private final class ChromeHost implements MobileVodChrome.Host {
+        @Override
+        public ActivityVideoBinding binding() {
+            return mBinding;
+        }
+
+        @Override
+        public PlayerManager player() {
+            return VideoActivity.this.player();
+        }
+
+        @Override
+        public boolean serviceReady() {
+            return service() != null;
+        }
+
+        @Override
+        public VodSessionViewModel session() {
+            return mSession;
+        }
+
+        @Override
+        public PiP pip() {
+            return mPiP;
+        }
+
+        @Override
+        public VodPlayerScale playerScale() {
+            return mPlayerScale;
+        }
+
+        @Override
+        public ViewGroup.LayoutParams frame() {
+            return mFrameParams;
+        }
+
+        @Override
+        public Runnable hideTask() {
+            return mR1;
+        }
+
+        @Override
+        public Runnable trafficTask() {
+            return mR2;
+        }
+
+        @Override
+        public Runnable orientTask() {
+            return mR3;
+        }
+
+        @Override
+        public boolean fullscreen() {
+            return isFullscreen();
+        }
+
+        @Override
+        public void setFullscreen(boolean value) {
+            VideoActivity.this.setFullscreen(value);
+        }
+
+        @Override
+        public boolean rotate() {
+            return isRotate();
+        }
+
+        @Override
+        public void setRotate(boolean value) {
+            VideoActivity.this.setRotate(value);
+        }
+
+        @Override
+        public boolean locked() {
+            return isLock();
+        }
+
+        @Override
+        public int scale() {
+            return getScale();
+        }
+
+        @Override
+        public boolean port() {
+            return isPort();
+        }
+
+        @Override
+        public boolean land() {
+            return isLand();
+        }
+
+        @Override
+        public boolean autoRotate() {
+            return isAutoRotate();
+        }
+
+        @Override
+        public boolean scrubbing() {
+            return isScrubbing();
+        }
+
+        @Override
+        public boolean inPip() {
+            return isInPictureInPictureMode();
+        }
+
+        @Override
+        public boolean visible(View view) {
+            return isVisible(view);
+        }
+
+        @Override
+        public MediaController controller() {
+            return VideoActivity.this.controller();
+        }
+
+        @Override
+        public void orientation(int value) {
+            setRequestedOrientation(value);
+        }
+
+        @Override
+        public void pad(ViewGroup view) {
+            setPadding(view);
+        }
+
+        @Override
+        public void clearPad(ViewGroup view) {
+            noPadding(view);
+        }
+
+        @Override
+        public ViewGroup[] controlViews() {
+            return new ViewGroup[] {mBinding.controlTopCompose, mBinding.controlCenterCompose, mBinding.controlLockCompose, mBinding.controlBottomCompose};
+        }
+
+        @Override
+        public ViewGroup gesture() {
+            return mBinding.gestureCompose;
+        }
+
+        @Override
+        public FragmentActivity activity() {
+            return VideoActivity.this;
+        }
+    }
+
 }
